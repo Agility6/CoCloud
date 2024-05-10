@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: coCloud-sever
+  output:
+    ansi:
+      enabled: always
+  mvc:
+    servlet:
+      load-on-startup: 1
+  servlet:
+    multipart:
+      max-file-size: 3072MB
+      max-request-size: 3072MB
+  datasource:
+    username: root
+    password: tang6d
+    url: jdbc:mysql://127.0.0.1:3308/co_cloud?characterEncoding=utf8&serverTimeZone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  mapper-locations: classpath:mappers/**/*.xml
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+        exclude: env,beans
+
+swagger2:
+  show: true
+  group-name: ${spring.application.name}
+  base-package: com.coCloud
+  title: coCloud-server docs
+  description: coCloud-server docs
+  terms-of-service-url: http://127.0.0.1:${server.port}
+  contact-name: agility
+  contact-url: https://agility6.site
+  contact-email: agility1013@gamil.com
+  version: 1.0
+
+logging:
+  file: ${user.home}/logs/${spring.application.name}/${spring.application.name}.log
+  level:
+    root: INFO

@@ -1,0 +1,9 @@
+   _____       _____ _                 _
+  / ____|     / ____| |               | |
+ | |     ___ | |    | | ___  _   _  __| |
+ | |    / _ \| |    | |/ _ \| | | |/ _` |
+ | |___| (_) | |____| | (_) | |_| | (_| |
+  \_____\___/ \_____|_|\___/ \__,_|\__,_|
+
+ ${AnsiColor.YELLOW}ENV:${spring.profiles.active:default}                         ${AnsiColor.BRIGHT_RED}VERSION:${swagger2.version:1.0}
+ ${AnsiColor.DEFAULT}
