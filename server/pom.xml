@@ -33,6 +33,20 @@
             <artifactId>coCloud-mybatis-plus</artifactId>
             <version>1.0</version>
         </dependency>
+        <dependency>
+            <groupId>com.coCloud</groupId>
+            <artifactId>coCloud-schedule</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.coCloud</groupId>
+            <artifactId>coCloud-cache-redis</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
