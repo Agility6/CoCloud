@@ -2,7 +2,7 @@ package com.coCloud.server.modules.user.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.coCloud.server.modules.user.entity.CoCloudUserSearchHistory;
-import com.coCloud.server.modules.user.service.CoCloudUserSearchHistoryService;
+import com.coCloud.server.modules.user.service.IUserSearchHistoryService;
 import com.coCloud.server.modules.user.mapper.CoCloudUserSearchHistoryMapper;
 import org.springframework.stereotype.Service;
 
@@ -12,8 +12,8 @@ import org.springframework.stereotype.Service;
 * @createDate 2024-05-10 19:20:36
 */
 @Service
-public class CoCloudUserSearchHistoryServiceImpl extends ServiceImpl<CoCloudUserSearchHistoryMapper, CoCloudUserSearchHistory>
-    implements CoCloudUserSearchHistoryService{
+public class UserSearchHistoryServiceImpl extends ServiceImpl<CoCloudUserSearchHistoryMapper, CoCloudUserSearchHistory>
+    implements IUserSearchHistoryService {
 
 }
 
