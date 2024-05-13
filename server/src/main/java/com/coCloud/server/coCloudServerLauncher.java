@@ -26,21 +26,10 @@ import javax.validation.constraints.NotBlank;
  */
 @SpringBootApplication(scanBasePackages = CoCloudConstants.BASE_COMPONENT_SCAN_PATH)
 @ServletComponentScan(basePackages = CoCloudConstants.BASE_COMPONENT_SCAN_PATH)
-@RestController
-@Api("测试接口类")
-@Validated
 @EnableTransactionManagement // 支持事务
 @MapperScan(basePackages = CoCloudConstants.BASE_COMPONENT_SCAN_PATH + ".server.modules.**.mapper")
 public class coCloudServerLauncher {
-    @Autowired
-    private static Environment environment;
     public static void main(String[] args) {
         SpringApplication.run(coCloudServerLauncher.class);
     }
-
-    @GetMapping("/hello")
-    public R<String> hello(@NotBlank(message = "name cannot be empty!") String name) {
-        return R.success("hello" + name + "!");
-    }
-
 }

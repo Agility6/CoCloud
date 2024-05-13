@@ -1,6 +1,5 @@
 package com.coCloud.web.exception;
 
-import com.coCloud.core.constants.CoCloudConstants;
 import com.coCloud.core.exception.CoCloudBusinessException;
 import com.coCloud.core.exception.CoCloudFrameworkException;
 import com.coCloud.core.response.R;
@@ -61,7 +60,7 @@ public class WebExceptionHandler {
     }
 
     @ExceptionHandler(value = CoCloudFrameworkException.class)
-    public R rPanFrameworkExceptionHandler(CoCloudFrameworkException e) {
+    public R CoCloudFrameworkExceptionHandler(CoCloudFrameworkException e) {
         return R.fail(ResponseCode.ERROR.getCode(), e.getMessage());
     }
 
