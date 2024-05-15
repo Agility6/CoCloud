@@ -22,7 +22,7 @@ import java.util.Date;
  * @description 针对表【co_cloud_user_file(用户文件信息表)】的数据库操作Service实现
  * @createDate 2024-05-10 19:22:09
  */
-@Service(value = "fileService")
+@Service(value = "userFileService")
 public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCloudUserFile> implements IUserFileService {
 
     /**
@@ -33,7 +33,29 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
      */
     @Override
     public Long createFolder(CreateFolderContext createFolderContext) {
-        return saveUserFile(createFolderContext.getUserId(), createFolderContext.getFolderName(), FolderFlagEnum.YES, null, null, createFolderContext.getUserId(), null);
+        return saveUserFile(createFolderContext.getParentId(),
+                createFolderContext.getFolderName(),
+                FolderFlagEnum.YES,
+                null,
+                null,
+                createFolderContext.getUserId(),
+                null);
+    }
+
+    /**
+     * 查询用户的根目录夹信息
+     *
+     * @param userId
+     * @return
+     */
+    @Override
+    public CoCloudUserFile getUserRootFile(Long userId) {
+        QueryWrapper queryWrapper = new QueryWrapper();
+        queryWrapper.eq("user_id", userId);
+        queryWrapper.eq("parent_id", FileConstants.TOP_PARENT_ID);
+        queryWrapper.eq("del_flag", DelFlagEnum.NO.getCode());
+        queryWrapper.eq("folder_flag", FolderFlagEnum.YES.getCode());
+        return getOne(queryWrapper);
     }
 
     /* =============> private <============= */

@@ -10,14 +10,16 @@ import com.coCloud.core.utils.JwtUtil;
 import com.coCloud.core.utils.PasswordUtil;
 import com.coCloud.server.modules.file.constants.FileConstants;
 import com.coCloud.server.modules.file.context.CreateFolderContext;
+import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.user.constants.UserConstants;
-import com.coCloud.server.modules.user.context.UserLoginContext;
-import com.coCloud.server.modules.user.context.UserRegisterContext;
+import com.coCloud.server.modules.user.context.*;
 import com.coCloud.server.modules.user.converter.UserConverter;
 import com.coCloud.server.modules.user.entity.CoCloudUser;
 import com.coCloud.server.modules.user.service.IUserService;
 import com.coCloud.server.modules.user.mapper.CoCloudUserMapper;
+import com.coCloud.server.modules.user.vo.UserInfoVO;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -43,7 +45,6 @@ public class UserServiceImpl extends ServiceImpl<CoCloudUserMapper, CoCloudUser>
 
     @Autowired
     private CacheManager cacheManager;
-
 
     /**
      * 用户注册业务实现
@@ -108,8 +109,112 @@ public class UserServiceImpl extends ServiceImpl<CoCloudUserMapper, CoCloudUser>
         }
     }
 
+    /**
+     * 忘记用户密码-校验用户名称
+     *
+     * @param checkUsernameContext
+     * @return
+     */
+    @Override
+    public String checkUsername(CheckUsernameContext checkUsernameContext) {
+        // 获取该账户的密保问题
+        String question = baseMapper.selectQuestionByUsername(checkUsernameContext.getUsername());
+        // 如果不存在说明没该用户
+        if (StringUtils.isBlank(question)) {
+            throw new CoCloudBusinessException("没有此用户");
+        }
+        return question;
+    }
+
+    /**
+     * 用户忘记密码—校验密保答案
+     *
+     * @param checkAnswerContext
+     * @return
+     */
+    @Override
+    public String checkAnswer(CheckAnswerContext checkAnswerContext) {
+        // 查询数据库验证
+        QueryWrapper queryWrapper = new QueryWrapper();
+        queryWrapper.eq("username", checkAnswerContext.getUsername());
+        queryWrapper.eq("question", checkAnswerContext.getQuestion());
+        queryWrapper.eq("answer", checkAnswerContext.getAnswer());
+
+        int count = count(queryWrapper);
+
+        if (count == 0) {
+            throw new CoCloudBusinessException("密保答案错误");
+        }
+
+        // 生成一个临时的token给前端以便后续修改密码校验
+        return generateCheckAnswerToken(checkAnswerContext);
+
+    }
+
+    /**
+     * 重置密码
+     * 1. 校验token是不是有效
+     * 2. 重置密码
+     *
+     * @param resetPasswordContext
+     */
+    @Override
+    public void resetPassword(ResetPasswordContext resetPasswordContext) {
+        // 校验忘记token
+        checkForgetPasswordToken(resetPasswordContext);
+        // 重置密码
+        checkAndResetUserPassword(resetPasswordContext);
+    }
+
+    /**
+     * 在线修改密码
+     * <p>
+     * 1. 校验旧密码
+     * 2. 重置新密码
+     * 3. 退出当前登录状态
+     *
+     * @param changePasswordContext
+     */
+    @Override
+    public void changePassword(ChangePasswordContext changePasswordContext) {
+        // 校验旧密码
+        checkOldPassword(changePasswordContext);
+        // 重置新密码
+        doChangePassword(changePasswordContext);
+        // 退出当前登录
+        exitLoginStatus(changePasswordContext);
+    }
+
+    /**
+     * 查询在线用户的基本信息
+     * <p>
+     * 1. 查询用户的基本信息实体
+     * 2. 查询用户的根文件信息
+     * 3. 拼装VO对象返回
+     *
+     * @param userId
+     * @return
+     */
+    @Override
+    public UserInfoVO info(Long userId) {
+        // 通过Id获取User的entity
+        CoCloudUser entity = getById(userId);
+        // 判空
+        if (Objects.isNull(entity)) {
+            throw new CoCloudBusinessException("用户信息查询失败");
+        }
+
+        // 通过Id获取FileInfo
+        CoCloudUserFile coCloudUserFile = getUserRootFileInfo(userId);
+        // 判空
+        if (Objects.isNull(coCloudUserFile)) {
+            throw new CoCloudBusinessException("查询用户根目录夹信息失败");
+        }
 
 
+        // 将User的entity和UserFile转化为VO
+        return userConverter.assembleUserInfoVO(entity, coCloudUserFile);
+    }
 
     /* =============> private <============= */
 
@@ -227,6 +332,142 @@ public class UserServiceImpl extends ServiceImpl<CoCloudUserMapper, CoCloudUser>
         // 将UserEntity封装到Context中
         userRegisterContext.setEntity(entity);
     }
+
+    /**
+     * 生成用户名忘记密码-校验密保答案通过的临时token
+     * token的失效时间为五分钟
+     *
+     * @param checkAnswerContext
+     * @return
+     */
+    private String generateCheckAnswerToken(CheckAnswerContext checkAnswerContext) {
+        return JwtUtil.generateToken(checkAnswerContext.getUsername(), UserConstants.FORGET_USERNAME, checkAnswerContext.getUsername(), UserConstants.FIVE_MINUTES_LONG);
+    }
+
+    /**
+     * 验证用户信息并重置用户密码
+     *
+     * @param resetPasswordContext
+     */
+    private void checkAndResetUserPassword(ResetPasswordContext resetPasswordContext) {
+        String username = resetPasswordContext.getUsername();
+        String password = resetPasswordContext.getPassword();
+
+        CoCloudUser entity = getCoCloudByUsername(username);
+
+        if (Objects.isNull(entity)) {
+            throw new CoCloudBusinessException("用户信息不存在");
+        }
+
+        // 加密新的密码
+        String newDbPassword = PasswordUtil.encryptPassword(entity.getSalt(), password);
+
+        entity.setPassword(newDbPassword);
+        entity.setUpdateTime(new Date());
+
+        if (!updateById(entity)) {
+            throw new CoCloudBusinessException("重置用户密码失败");
+        }
+
+    }
+
+    /**
+     * 验证忘记密码的token是否是有效的
+     *
+     * @param resetPasswordContext
+     */
+    private void checkForgetPasswordToken(ResetPasswordContext resetPasswordContext) {
+        String token = resetPasswordContext.getToken();
+        Object value = JwtUtil.analyzeToken(token, UserConstants.FORGET_USERNAME);
+        // token过期
+        if (Objects.isNull(value)) {
+            throw new CoCloudBusinessException(ResponseCode.TOKEN_EXPIRE);
+        }
+        String tokenUsername = String.valueOf(value);
+        // 解析token是否正确
+        if (Objects.equals(tokenUsername, resetPasswordContext.getUsername())) {
+            throw new CoCloudBusinessException("token错误");
+        }
+
+    }
+
+    /**
+     * 退出用户的登录状态
+     *
+     * @param changePasswordContext
+     */
+    private void exitLoginStatus(ChangePasswordContext changePasswordContext) {
+        exit(changePasswordContext.getUserId());
+    }
+
+    /**
+     * 修改新密码
+     *
+     * @param changePasswordContext
+     */
+    private void doChangePassword(ChangePasswordContext changePasswordContext) {
+        // 获取新密码
+        String newPassword = changePasswordContext.getNewPassword();
+        // 获取上下文的entity
+        CoCloudUser entity = changePasswordContext.getEntity();
+        // 获取salt
+        String salt = entity.getSalt();
+
+        // 加密新密码
+        String encNewPassword = PasswordUtil.encryptPassword(salt, newPassword);
+
+        // 保证到entity中
+        entity.setPassword(encNewPassword);
+
+        // 更新数据库
+        if (!updateById(entity)) {
+            throw new CoCloudBusinessException("修改用户密码失败");
+        }
+    }
+
+    /**
+     * 校验用户旧密码
+     * 该步骤会将查询并且封装到实体上下文对象中
+     *
+     * @param changePasswordContext
+     */
+    private void checkOldPassword(ChangePasswordContext changePasswordContext) {
+        // 获取用户Id
+        Long userId = changePasswordContext.getUserId();
+        // 获取旧密码
+        String oldPassword = changePasswordContext.getOldPassword();
+
+        // 通过id获取entity
+        CoCloudUser entity = getById(userId);
+        // 判空
+        if (Objects.isNull(entity)) {
+            throw new CoCloudBusinessException("用户信息不存在");
+        }
+        // 放入Context中
+        changePasswordContext.setEntity(entity);
+
+        // 加密旧密码
+        String encOldPassword = PasswordUtil.encryptPassword(entity.getSalt(), oldPassword);
+        // 获取db密码
+        String dbOldPassword = entity.getPassword();
+        // 判断是否一致
+        if (!Objects.equals(encOldPassword, dbOldPassword)) {
+            throw new CoCloudBusinessException("旧密码不正确");
+        }
+
+    }
+
+    /**
+     * 获取用户根文件夹信息实体
+     *
+     * @param userId
+     * @return
+     */
+    private CoCloudUserFile getUserRootFileInfo(Long userId) {
+        return iUserFileService.getUserRootFile(userId);
+    }
+
+
 }
 
 
