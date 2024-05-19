@@ -7,15 +7,18 @@ import com.coCloud.core.exception.CoCloudBusinessException;
 import com.coCloud.core.utils.IdUtil;
 import com.coCloud.server.modules.file.constants.FileConstants;
 import com.coCloud.server.modules.file.context.CreateFolderContext;
+import com.coCloud.server.modules.file.context.QueryFileListContext;
 import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.coCloud.server.modules.file.enums.DelFlagEnum;
 import com.coCloud.server.modules.file.enums.FolderFlagEnum;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.file.mapper.CoCloudUserFileMapper;
+import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.List;
 
 /**
  * @author agility6
@@ -56,6 +59,17 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
         queryWrapper.eq("del_flag", DelFlagEnum.NO.getCode());
         queryWrapper.eq("folder_flag", FolderFlagEnum.YES.getCode());
         return getOne(queryWrapper);
+    }
+
+    /**
+     * 查询用户的文件列表
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public List<CoCloudUserFileVO> getFileList(QueryFileListContext context) {
+        return baseMapper.selectFileList(context);
     }
 
     /* =============> private <============= */

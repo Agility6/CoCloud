@@ -1,8 +1,12 @@
 package com.coCloud.server.modules.file.service;
 
 import com.coCloud.server.modules.file.context.CreateFolderContext;
+import com.coCloud.server.modules.file.context.QueryFileListContext;
 import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
+
+import java.util.List;
 
 /**
  * @author agility6
@@ -26,4 +30,12 @@ public interface IUserFileService extends IService<CoCloudUserFile> {
      * @return
      */
     CoCloudUserFile getUserRootFile(Long userId);
+
+    /**
+     * 查询用户的文件列表
+     *
+     * @param context
+     * @return
+     */
+    List<CoCloudUserFileVO> getFileList(QueryFileListContext context);
 }

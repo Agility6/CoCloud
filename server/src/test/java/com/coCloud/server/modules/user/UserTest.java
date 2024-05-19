@@ -3,15 +3,12 @@ package com.coCloud.server.modules.user;
 import cn.hutool.core.lang.Assert;
 import com.coCloud.core.exception.CoCloudBusinessException;
 import com.coCloud.core.utils.JwtUtil;
-import com.coCloud.server.coCloudServerLauncher;
+import com.coCloud.server.CoCloudServerLauncher;
 import com.coCloud.server.modules.user.constants.UserConstants;
 import com.coCloud.server.modules.user.context.*;
 import com.coCloud.server.modules.user.service.IUserService;
 import com.coCloud.server.modules.user.vo.UserInfoVO;
-import com.sun.corba.se.impl.oa.toa.TOA;
-import io.jsonwebtoken.lang.Strings;
 import org.apache.commons.lang3.StringUtils;
-import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  * @Version: 1.0
  */
 @RunWith(SpringJUnit4ClassRunner.class)
-@SpringBootTest(classes = coCloudServerLauncher.class)
+@SpringBootTest(classes = CoCloudServerLauncher.class)
 @Transactional // 开启事务test结束后自动回滚
 public class UserTest {
 

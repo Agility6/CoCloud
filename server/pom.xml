@@ -100,7 +100,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.coCloud.server.coCloudServerLauncher</mainClass>
+                    <mainClass>com.coCloud.server.CoCloudServerLauncher</mainClass>
                     <layout>ZIP</layout>
                 </configuration>
                 <executions>
