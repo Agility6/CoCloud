@@ -1,7 +1,6 @@
 package com.coCloud.server.modules.file.service;
 
-import com.coCloud.server.modules.file.context.CreateFolderContext;
-import com.coCloud.server.modules.file.context.QueryFileListContext;
+import com.coCloud.server.modules.file.context.*;
 import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
@@ -38,4 +37,26 @@ public interface IUserFileService extends IService<CoCloudUserFile> {
      * @return
      */
     List<CoCloudUserFileVO> getFileList(QueryFileListContext context);
+
+    /**
+     * 更改文件名称
+     *
+     * @param context
+     */
+    void updateFilename(UpdateFilenameContext context);
+
+    /**
+     * 批量删除用户文件
+     *
+     * @param context
+     */
+    void deleteFile(DeleteFileContext context);
+
+    /**
+     * 文件妙传功能
+     *
+     * @param context
+     * @return
+     */
+    boolean secUpload(SecUploadFileContext context);
 }
