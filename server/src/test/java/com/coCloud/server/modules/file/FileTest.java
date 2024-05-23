@@ -22,8 +22,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 import java.util.List;
@@ -352,7 +354,53 @@ public class FileTest {
         Assert.isFalse(result);
     }
 
+    /**
+     * 测试单文件上传成功
+     */
+    @Test
+    public void testUploadSuccess() {
+        Long userId = register();
+        UserInfoVO userInfoVO = info(userId);
+
+        FileUploadContext context = new FileUploadContext();
+        MultipartFile file = genarateMultipartFile();
+        context.setFile(file);
+        context.setParentId(userInfoVO.getRootFileId());
+        context.setUserId(userId);
+        context.setIdentifier("12345678");
+        context.setTotalSize(file.getSize());
+        context.setFilename(file.getOriginalFilename());
+        iUserFileService.upload(context);
+
+        QueryFileListContext queryFileListContext = new QueryFileListContext();
+        queryFileListContext.setDelFlag(DelFlagEnum.NO.getCode());
+        queryFileListContext.setUserId(userId);
+        queryFileListContext.setParentId(userInfoVO.getRootFileId());
+        List<CoCloudUserFileVO> fileList = iUserFileService.getFileList(queryFileListContext);
+        Assert.notEmpty(fileList);
+        Assert.isTrue(fileList.size() == 1);
+    }
+
     /* =============> private <============= */
+
+    /**
+     * 生成模拟的网络文件实体
+     *
+     * @return
+     */
+    private static MultipartFile genarateMultipartFile() {
+        MultipartFile file = null;
+        try {
+            StringBuffer stringBuffer = new StringBuffer();
+            for (int i = 0; i < 1024 * 1024; i++) {
+                stringBuffer.append("a");
+            }
+            file = new MockMultipartFile("file", "test.txt", "multipart/form-data", stringBuffer.toString().getBytes("UTF-8"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return file;
+    }
 
     /**
      * 用户注册
