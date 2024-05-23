@@ -1,5 +1,6 @@
 package com.coCloud.server.modules.file.service;
 
+import com.coCloud.server.modules.file.context.FileSaveContext;
 import com.coCloud.server.modules.file.context.QueryRealFileListContext;
 import com.coCloud.server.modules.file.entity.CoCloudFile;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -20,4 +21,11 @@ public interface IFileService extends IService<CoCloudFile> {
      * @return
      */
     List<CoCloudFile> getFileList(QueryRealFileListContext context);
+
+    /**
+     * 上传单文件并保存实体记录
+     *
+     * @param context
+     */
+    void saveFile(FileSaveContext context);
 }

@@ -20,6 +20,11 @@
     <dependencies>
         <dependency>
             <groupId>com.coCloud</groupId>
+            <artifactId>coCloud-core</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.coCloud</groupId>
             <artifactId>coCloud-cache-core</artifactId>
             <version>1.0</version>
         </dependency>

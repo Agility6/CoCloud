@@ -141,7 +141,7 @@ public class FileUtils {
     public static String generateDefaultStoreFileRealPath() {
         return new StringBuffer(System.getProperty("user.home"))
                 .append(File.separator)
-                .append("rpan")
+                .append("coCloud")
                 .toString();
     }
 
@@ -153,7 +153,7 @@ public class FileUtils {
     public static String generateDefaultStoreFileChunkRealPath() {
         return new StringBuffer(System.getProperty("user.home"))
                 .append(File.separator)
-                .append("rpan")
+                .append("coCloud")
                 .append(File.separator)
                 .append("chunks")
                 .toString();

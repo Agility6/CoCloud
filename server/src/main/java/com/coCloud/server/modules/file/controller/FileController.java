@@ -8,10 +8,7 @@ import com.coCloud.server.modules.file.constants.FileConstants;
 import com.coCloud.server.modules.file.context.*;
 import com.coCloud.server.modules.file.converter.FileConverter;
 import com.coCloud.server.modules.file.enums.DelFlagEnum;
-import com.coCloud.server.modules.file.po.CreateFolderPO;
-import com.coCloud.server.modules.file.po.DeleteFilePO;
-import com.coCloud.server.modules.file.po.SecUploadFilePO;
-import com.coCloud.server.modules.file.po.UpdateFilenamePO;
+import com.coCloud.server.modules.file.po.*;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
 import com.google.common.base.Splitter;
@@ -128,6 +125,19 @@ public class FileController {
             return R.success();
         }
         return R.fail("文件唯一标识不存在，请手动执行文件上传");
+    }
+
+    @ApiOperation(
+            value = "单文件上传",
+            notes = "该接口提供了单文件上传的功能",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @PostMapping("file/upload")
+    public R upload(@Validated FileUploadPO fileUploadPO) {
+        FileUploadContext context = fileConverter.fileUploadPO2FileUploadContext(fileUploadPO);
+        iUserFileService.upload(context);
+        return R.success();
     }
 
 

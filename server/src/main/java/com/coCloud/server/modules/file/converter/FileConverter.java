@@ -1,16 +1,12 @@
 package com.coCloud.server.modules.file.converter;
 
-import com.coCloud.server.modules.file.context.CreateFolderContext;
-import com.coCloud.server.modules.file.context.DeleteFileContext;
-import com.coCloud.server.modules.file.context.SecUploadFileContext;
-import com.coCloud.server.modules.file.context.UpdateFilenameContext;
-import com.coCloud.server.modules.file.po.CreateFolderPO;
-import com.coCloud.server.modules.file.po.DeleteFilePO;
-import com.coCloud.server.modules.file.po.SecUploadFilePO;
-import com.coCloud.server.modules.file.po.UpdateFilenamePO;
+import com.coCloud.server.modules.file.context.*;
+import com.coCloud.server.modules.file.po.*;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.springframework.jmx.export.annotation.ManagedOperation;
+
+import java.util.Map;
 
 /**
  * ClassName: FileConverter
@@ -39,4 +35,13 @@ public interface FileConverter {
     @Mapping(target = "parentId", expression = "java(com.coCloud.core.utils.IdUtil.decrypt(secUploadFilePO.getParentId()))")
     @Mapping(target = "userId", expression = "java(com.coCloud.server.common.utils.UserIdUtil.get())")
     SecUploadFileContext secUploadFilePO2SecUploadFileContext(SecUploadFilePO secUploadFilePO);
+
+    @Mapping(target = "parentId", expression = "java(com.coCloud.core.utils.IdUtil.decrypt(fileUploadPO.getParentId()))")
+    @Mapping(target = "userId", expression = "java(com.coCloud.server.common.utils.UserIdUtil.get())")
+    FileUploadContext fileUploadPO2FileUploadContext(FileUploadPO fileUploadPO);
+
+
+    // 忽略CoCloudFile属性
+    @Mapping(target = "record", ignore = true)
+    FileSaveContext fileUploadContext2FileSaveContext(FileUploadContext fileUploadContext);
 }

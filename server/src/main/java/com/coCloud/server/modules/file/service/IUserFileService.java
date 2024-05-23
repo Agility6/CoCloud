@@ -59,4 +59,10 @@ public interface IUserFileService extends IService<CoCloudUserFile> {
      * @return
      */
     boolean secUpload(SecUploadFileContext context);
+
+    /**
+     * 单文件上传
+     * @param context
+     */
+    void upload(FileUploadContext context);
 }
