@@ -1,20 +1,27 @@
 package com.coCloud.server.modules.file;
 
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.lang.Assert;
 import com.coCloud.core.exception.CoCloudBusinessException;
 import com.coCloud.core.utils.IdUtil;
 import com.coCloud.server.CoCloudServerLauncher;
 import com.coCloud.server.modules.file.context.*;
 import com.coCloud.server.modules.file.entity.CoCloudFile;
+import com.coCloud.server.modules.file.entity.CoCloudFileChunk;
 import com.coCloud.server.modules.file.enums.DelFlagEnum;
+import com.coCloud.server.modules.file.enums.MergeFlagEnum;
+import com.coCloud.server.modules.file.service.IFileChunkService;
 import com.coCloud.server.modules.file.service.IFileService;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
+import com.coCloud.server.modules.file.vo.FileChunkUploadVO;
+import com.coCloud.server.modules.file.vo.UploadedChunksVO;
 import com.coCloud.server.modules.user.context.UserLoginContext;
 import com.coCloud.server.modules.user.context.UserRegisterContext;
 import com.coCloud.server.modules.user.service.IUserService;
 import com.coCloud.server.modules.user.vo.UserInfoVO;
 import com.google.common.collect.Lists;
+import lombok.AllArgsConstructor;
 import lombok.val;
 import org.apache.commons.collections.CollectionUtils;
 import org.junit.After;
@@ -29,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * ClassName: FileTest
@@ -51,6 +59,9 @@ public class FileTest {
 
     @Autowired
     private IFileService iFileService;
+
+    @Autowired
+    private IFileChunkService iFileChunkService;
 
     /**
      * 测试用户查询文件列表成功
@@ -381,7 +392,117 @@ public class FileTest {
         Assert.isTrue(fileList.size() == 1);
     }
 
+    /**
+     * 测试查询用户已上传的文件分片信息列表成功
+     */
+    @Test
+    public void testQueryUploadedChunksSuccess() {
+        Long userId = register();
+
+        String identifier = "123456789";
+
+        CoCloudFileChunk record = new CoCloudFileChunk();
+        record.setId(IdUtil.get());
+        record.setIdentifier(identifier);
+        record.setRealPath("realPath");
+        record.setChunkNumber(1);
+        record.setExpirationTime(DateUtil.offsetDay(new Date(), 1));
+        record.setCreateUser(userId);
+        record.setCreateTime(new Date());
+        boolean save = iFileChunkService.save(record);
+        Assert.isTrue(save);
+
+        QueryUploadedChunksContext context = new QueryUploadedChunksContext();
+        context.setIdentifier(identifier);
+        context.setUserId(userId);
+
+        UploadedChunksVO vo = iUserFileService.getUploadedChunks(context);
+        Assert.notNull(vo);
+        Assert.notEmpty(vo.getUploadedChunks());
+    }
+
+    /**
+     * 测试文件分片上传成功
+     * @throws InterruptedException
+     */
+    @Test
+    public void uploadWithChunkTest() throws InterruptedException {
+        Long userId = register();
+        UserInfoVO userInfoVO = info(userId);
+
+        // 表示有10个线程需要完成任务
+        CountDownLatch countDownLatch = new CountDownLatch(10);
+        for (int i = 0; i < 10; i++) {
+            new ChunkUploader(countDownLatch, i + 1, 10, iUserFileService, userId, userInfoVO.getRootFileId()).start();
+        }
+
+        countDownLatch.await();
+
+    }
+
     /* =============> private <============= */
+
+    /**
+     * 文件分片上传器
+     */
+    @AllArgsConstructor
+    private static class ChunkUploader extends Thread {
+
+        private CountDownLatch countDownLatch;
+
+        private Integer chunk;
+
+        private Integer chunks;
+
+        private IUserFileService iUserFileService;
+
+        private Long userId;
+
+        private Long parentId;
+
+        /**
+         * 1、上传文件分片
+         * 2、根据上传的结果来调用文件分片合并
+         */
+        @Override
+        public void run() {
+            super.run();
+            MultipartFile file = genarateMultipartFile();
+            Long totalSize = file.getSize() * chunks;
+            String filename = "test.txt";
+            String identifier = "123456789";
+
+            FileChunkUploadContext fileChunkUploadContext = new FileChunkUploadContext();
+            fileChunkUploadContext.setFilename(filename);
+            fileChunkUploadContext.setIdentifier(identifier);
+            fileChunkUploadContext.setTotalChunks(chunks);
+            fileChunkUploadContext.setChunkNumber(chunk);
+            fileChunkUploadContext.setCurrentChunkSize(file.getSize());
+            fileChunkUploadContext.setTotalSize(totalSize);
+            fileChunkUploadContext.setFile(file);
+            fileChunkUploadContext.setUserId(userId);
+
+            FileChunkUploadVO fileChunkUploadVO = iUserFileService.chunkUpload(fileChunkUploadContext);
+
+            if (fileChunkUploadVO.getMergeFlag().equals(MergeFlagEnum.READY.getCode())) {
+                System.out.println("分片 " + chunk + " 检测到可以合并分片");
+
+                FileChunkMergeContext fileChunkMergeContext = new FileChunkMergeContext();
+                fileChunkMergeContext.setFilename(filename);
+                fileChunkMergeContext.setIdentifier(identifier);
+                fileChunkMergeContext.setTotalSize(totalSize);
+                fileChunkMergeContext.setParentId(parentId);
+                fileChunkMergeContext.setUserId(userId);
+
+                iUserFileService.mergeFile(fileChunkMergeContext);
+                countDownLatch.countDown();
+            } else {
+                countDownLatch.countDown();
+            }
+
+        }
+
+    }
 
     /**
      * 生成模拟的网络文件实体
