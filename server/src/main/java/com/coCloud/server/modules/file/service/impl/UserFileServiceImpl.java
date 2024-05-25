@@ -1,7 +1,9 @@
 package com.coCloud.server.modules.file.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.coCloud.core.constants.CoCloudConstants;
 import com.coCloud.core.exception.CoCloudBusinessException;
@@ -16,10 +18,13 @@ import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.coCloud.server.modules.file.enums.DelFlagEnum;
 import com.coCloud.server.modules.file.enums.FileTypeEnum;
 import com.coCloud.server.modules.file.enums.FolderFlagEnum;
+import com.coCloud.server.modules.file.service.IFileChunkService;
 import com.coCloud.server.modules.file.service.IFileService;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.file.mapper.CoCloudUserFileMapper;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
+import com.coCloud.server.modules.file.vo.FileChunkUploadVO;
+import com.coCloud.server.modules.file.vo.UploadedChunksVO;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +48,9 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
 
     @Autowired
     private IFileService iFileService;
+
+    @Autowired
+    private IFileChunkService iFileChunkService;
 
     @Autowired
     private FileConverter fileConverter;
@@ -138,13 +146,7 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
         if (CollectionUtils.isNotEmpty(fileList)) {
             // 获取之前的file文件
             CoCloudFile record = fileList.get(CoCloudConstants.ZERO_INT);
-            saveUserFile(context.getParentId(),
-                    context.getFilename(),
-                    FolderFlagEnum.NO,
-                    FileTypeEnum.getFileTypeCode(FileUtils.getFileSuffix(context.getFilename())),
-                    record.getFileId(),
-                    context.getUserId(),
-                    record.getFileSizeDesc());
+            saveUserFile(context.getParentId(), context.getFilename(), FolderFlagEnum.NO, FileTypeEnum.getFileTypeCode(FileUtils.getFileSuffix(context.getFilename())), record.getFileId(), context.getUserId(), record.getFileSizeDesc());
             return true;
         }
         return false;
@@ -162,6 +164,75 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
     @Override
     public void upload(FileUploadContext context) {
         saveFile(context);
+        saveUserFile(context.getParentId(), context.getFilename(), FolderFlagEnum.NO, FileTypeEnum.getFileTypeCode(FileUtils.getFileSuffix(context.getFilename())), context.getRecord().getFileId(), context.getUserId(), context.getRecord().getFileSizeDesc());
+    }
+
+    /**
+     * 文件分片上传
+     * <p>
+     * 1. 上传实体文件
+     * 2. 保存分片文件记录
+     * 3. 校验是否全部分片上传完成
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public FileChunkUploadVO chunkUpload(FileChunkUploadContext context) {
+        // 将context转化为FileChunkSaveContext交给FileChunkService实现
+        FileChunkSaveContext fileChunkSaveContext = fileConverter.fileChunkUploadContext2FileChunkSaveContext(context);
+        // 保存分片文件记录
+        iFileChunkService.saveChunkFile(fileChunkSaveContext);
+        FileChunkUploadVO vo = new FileChunkUploadVO();
+        vo.setMergeFlag(fileChunkSaveContext.getMergeFlagEnum().getCode());
+        return vo;
+    }
+
+    /**
+     * 查询用户已上传的分片列表
+     * <p>
+     * 1. 查询已上传的分片列表
+     * 2. 封装返回实体
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public UploadedChunksVO getUploadedChunks(QueryUploadedChunksContext context) {
+        // 查询数据库
+        QueryWrapper queryWrapper = Wrappers.query();
+        // 选择字段，chunk_number
+        queryWrapper.select("chunk_number");
+        // identifier
+        queryWrapper.eq("identifier", context.getIdentifier());
+        // create_user
+        queryWrapper.eq("create_user", context.getUserId());
+        // expiration_time 大于当前时间
+        queryWrapper.gt("expiration_time", new Date());
+
+        // listObjs查询并返回指定条件下的数据列表，并且转化为Integer，（注意这里交给FileChunkService处理）
+        List<Integer> uploadedChunks = iFileChunkService.listObjs(queryWrapper, value -> (Integer) value);
+        // 封装vo返回
+        UploadedChunksVO vo = new UploadedChunksVO();
+        vo.setUploadedChunks(uploadedChunks);
+        return vo;
+
+    }
+
+    /**
+     * 文件分片合并
+     * <p>
+     * 1. 文件分片物理合并
+     * 2. 保存文件实体记录
+     * 3. 保存文件用户关系映射
+     *
+     * @param context
+     */
+    @Override
+    public void mergeFile(FileChunkMergeContext context) {
+        // 文件分片物理合并
+        mergeFileChunkAndSaveFile(context);
+        // 保存文件用户关系映射
         saveUserFile(context.getParentId(),
                 context.getFilename(),
                 FolderFlagEnum.NO,
@@ -171,19 +242,6 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
                 context.getRecord().getFileSizeDesc());
     }
 
-    /**
-     * 上传文件并保存实体文件记录
-     * 委托给实体文件的Service去完成操作
-     *
-     * @param context
-     */
-    private void saveFile(FileUploadContext context) {
-        // 将FileUploadContext转换为FileSaveContext
-        FileSaveContext fileSaveContext = fileConverter.fileUploadContext2FileSaveContext(context);
-        iFileService.saveFile(fileSaveContext);
-        // 保存实体文件记录，在保存用户文件关系记录中使用
-        context.setRecord(fileSaveContext.getRecord());
-    }
 
     /* =============> private <============= */
 
@@ -471,6 +529,35 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
         context.setIdentifier(identifier);
         return iFileService.getFileList(context);
 
+    }
+
+    /**
+     * 上传文件并保存实体文件记录
+     * 委托给实体文件的Service去完成操作
+     *
+     * @param context
+     */
+    private void saveFile(FileUploadContext context) {
+        // 将FileUploadContext转换为FileSaveContext
+        FileSaveContext fileSaveContext = fileConverter.fileUploadContext2FileSaveContext(context);
+        iFileService.saveFile(fileSaveContext);
+        // 保存实体文件记录，在保存用户文件关系记录中使用
+        context.setRecord(fileSaveContext.getRecord());
+    }
+
+
+    /**
+     * 合并文件分片并保存物理文件记录
+     *
+     * @param context
+     */
+    private void mergeFileChunkAndSaveFile(FileChunkMergeContext context) {
+        // 将context转化为FileChunkMergeAndSaveContext
+        FileChunkMergeAndSaveContext fileChunkMergeAndSaveContext = fileConverter.fileChunkMergeContext2FileChunkMergeAndSaveContext(context);
+        // 交给FileService处理
+        iFileService.mergeFileChunkAndSaveFile(fileChunkMergeAndSaveContext);
+        // 将UserFile添加到context中
+        context.setRecord(fileChunkMergeAndSaveContext.getRecord());
     }
 
 

@@ -1,5 +1,6 @@
 package com.coCloud.server.modules.file.service;
 
+import com.coCloud.server.modules.file.context.FileChunkMergeAndSaveContext;
 import com.coCloud.server.modules.file.context.FileSaveContext;
 import com.coCloud.server.modules.file.context.QueryRealFileListContext;
 import com.coCloud.server.modules.file.entity.CoCloudFile;
@@ -28,4 +29,11 @@ public interface IFileService extends IService<CoCloudFile> {
      * @param context
      */
     void saveFile(FileSaveContext context);
+
+    /**
+     * 合并物理文件并保存物理文件记录
+     *
+     * @param context
+     */
+    void mergeFileChunkAndSaveFile(FileChunkMergeAndSaveContext context);
 }

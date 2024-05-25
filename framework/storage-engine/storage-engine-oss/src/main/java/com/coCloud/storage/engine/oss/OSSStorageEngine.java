@@ -2,6 +2,8 @@ package com.coCloud.storage.engine.oss;
 
 import com.coCloud.storage.engine.core.AbstractStorageEngine;
 import com.coCloud.storage.engine.core.context.DeleteFileContext;
+import com.coCloud.storage.engine.core.context.MergeFileContext;
+import com.coCloud.storage.engine.core.context.StoreFileChunkContext;
 import com.coCloud.storage.engine.core.context.StoreFileContext;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +26,16 @@ public class OSSStorageEngine extends AbstractStorageEngine {
 
     @Override
     protected void doDelete(DeleteFileContext context) throws IOException {
+
+    }
+
+    @Override
+    protected void doStoreChunk(StoreFileChunkContext context) throws IOException {
+
+    }
+
+    @Override
+    protected void doMergeFile(MergeFileContext context) throws IOException {
 
     }
 }

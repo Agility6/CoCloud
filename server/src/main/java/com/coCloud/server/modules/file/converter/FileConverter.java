@@ -2,6 +2,7 @@ package com.coCloud.server.modules.file.converter;
 
 import com.coCloud.server.modules.file.context.*;
 import com.coCloud.server.modules.file.po.*;
+import com.coCloud.storage.engine.core.context.StoreFileChunkContext;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.springframework.jmx.export.annotation.ManagedOperation;
@@ -44,4 +45,23 @@ public interface FileConverter {
     // 忽略CoCloudFile属性
     @Mapping(target = "record", ignore = true)
     FileSaveContext fileUploadContext2FileSaveContext(FileUploadContext fileUploadContext);
+
+    @Mapping(target = "userId", expression = "java(com.coCloud.server.common.utils.UserIdUtil.get())")
+    FileChunkUploadContext fileChunkUploadPO2FileChunkUploadContext(FileChunkUploadPO fileChunkUploadPO);
+
+    FileChunkSaveContext fileChunkUploadContext2FileChunkSaveContext(FileChunkUploadContext context);
+
+    // 忽略realPath的映射
+    @Mapping(target = "realPath", ignore = true)
+    StoreFileChunkContext fileChunkSaveContext2StoreFileChunkContext(FileChunkSaveContext context);
+
+    @Mapping(target = "userId", expression = "java(com.coCloud.server.common.utils.UserIdUtil.get())")
+    QueryUploadedChunksContext queryUploadedChunksPO2QueryUploadedChunksContext(QueryUploadedChunksPO queryUploadedChunksPO);
+
+    @Mapping(target = "userId", expression = "java(com.coCloud.server.common.utils.UserIdUtil.get())")
+    @Mapping(target = "parentId", expression = "java(com.coCloud.core.utils.IdUtil.decrypt(fileChunkMergePO.getParentId()))")
+    FileChunkMergeContext fileChunkMergePO2FileChunkMergeContext(FileChunkMergePO fileChunkMergePO);
+
+
+    FileChunkMergeAndSaveContext fileChunkMergeContext2FileChunkMergeAndSaveContext(FileChunkMergeContext context);
 }

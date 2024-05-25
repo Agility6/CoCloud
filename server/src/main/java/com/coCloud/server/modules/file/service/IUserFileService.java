@@ -4,6 +4,8 @@ import com.coCloud.server.modules.file.context.*;
 import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
+import com.coCloud.server.modules.file.vo.FileChunkUploadVO;
+import com.coCloud.server.modules.file.vo.UploadedChunksVO;
 
 import java.util.List;
 
@@ -62,7 +64,31 @@ public interface IUserFileService extends IService<CoCloudUserFile> {
 
     /**
      * 单文件上传
+     *
      * @param context
      */
     void upload(FileUploadContext context);
+
+    /**
+     * 文件分片上传
+     *
+     * @param context
+     * @return
+     */
+    FileChunkUploadVO chunkUpload(FileChunkUploadContext context);
+
+    /**
+     * 查询用户已上传的分片列表
+     *
+     * @param context
+     * @return
+     */
+    UploadedChunksVO getUploadedChunks(QueryUploadedChunksContext context);
+
+    /**
+     * 文件分片合并
+     *
+     * @param context
+     */
+    void mergeFile(FileChunkMergeContext context);
 }

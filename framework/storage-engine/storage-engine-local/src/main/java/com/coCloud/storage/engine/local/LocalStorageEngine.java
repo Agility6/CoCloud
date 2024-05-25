@@ -3,6 +3,8 @@ package com.coCloud.storage.engine.local;
 import com.coCloud.core.utils.FileUtils;
 import com.coCloud.storage.engine.core.AbstractStorageEngine;
 import com.coCloud.storage.engine.core.context.DeleteFileContext;
+import com.coCloud.storage.engine.core.context.MergeFileContext;
+import com.coCloud.storage.engine.core.context.StoreFileChunkContext;
 import com.coCloud.storage.engine.core.context.StoreFileContext;
 import com.coCloud.storage.engine.local.config.LocalStorageEngineConfig;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.List;
 
 /**
  * ClassName: LocalStorageEngine
@@ -52,5 +56,49 @@ public class LocalStorageEngine extends AbstractStorageEngine {
     @Override
     protected void doDelete(DeleteFileContext context) throws IOException {
         FileUtils.deleteFiles(context.getRealFilePathList());
+    }
+
+    /**
+     * 执行保存文件分片
+     *
+     * @param context
+     * @throws IOException
+     */
+    @Override
+    protected void doStoreChunk(StoreFileChunkContext context) throws IOException {
+        // 本质和保存单文件逻辑一致
+        String basePath = config.getRootFileChunkPath();
+        String realFilePath = FileUtils.generateStoreFileChunkRealPath(basePath, context.getIdentifier(), context.getChunkNumber());
+        FileUtils.writeStream2File(context.getInputStream(), new File(realFilePath), context.getTotalSize());
+        // 将realFilePath保存到context中
+        context.setRealPath(realFilePath);
+    }
+
+    /**
+     * 执行文件分片动作
+     * @param context
+     * @throws IOException
+     */
+    @Override
+    protected void doMergeFile(MergeFileContext context) throws IOException {
+        // 获取基础路径
+        String basePath= config.getRootFilePath();
+        // 生成真实路径
+        String realFilePath = FileUtils.generateStoreFileRealPath(basePath, context.getFilename());
+        // 创建文件
+        FileUtils.createFile(new File(realFilePath));
+        // 获取所有的分片路径
+        List<String> chunkPaths = context.getRealPathList();
+        // 合并
+        for (String chunkPath : chunkPaths) {
+            FileUtils.appendWrite(Paths.get(realFilePath), new File(chunkPath).toPath());
+        }
+
+        // 根据分片路径删除文件
+        FileUtils.deleteFiles(chunkPaths);
+
+        // context设置合并完成后的路径
+        context.setRealPath(realFilePath);
+
     }
 }

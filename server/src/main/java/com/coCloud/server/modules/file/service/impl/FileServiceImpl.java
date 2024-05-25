@@ -1,18 +1,25 @@
 package com.coCloud.server.modules.file.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.coCloud.core.exception.CoCloudBusinessException;
 import com.coCloud.core.utils.FileUtils;
 import com.coCloud.core.utils.IdUtil;
 import com.coCloud.server.common.event.log.ErrorLogEvent;
+import com.coCloud.server.modules.file.context.FileChunkMergeAndSaveContext;
 import com.coCloud.server.modules.file.context.FileSaveContext;
 import com.coCloud.server.modules.file.context.QueryRealFileListContext;
 import com.coCloud.server.modules.file.entity.CoCloudFile;
+import com.coCloud.server.modules.file.entity.CoCloudFileChunk;
+import com.coCloud.server.modules.file.service.IFileChunkService;
 import com.coCloud.server.modules.file.service.IFileService;
 import com.coCloud.server.modules.file.mapper.CoCloudFileMapper;
 import com.coCloud.storage.engine.core.StorageEngine;
 import com.coCloud.storage.engine.core.context.DeleteFileContext;
+import com.coCloud.storage.engine.core.context.MergeFileContext;
 import com.coCloud.storage.engine.core.context.StoreFileContext;
 import com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
@@ -22,11 +29,12 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * @author agility6
@@ -40,6 +48,9 @@ public class FileServiceImpl extends ServiceImpl<CoCloudFileMapper, CoCloudFile>
     private StorageEngine storageEngine;
 
     private ApplicationContext applicationContext;
+
+    @Autowired
+    private IFileChunkService iFileChunkService;
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -85,6 +96,22 @@ public class FileServiceImpl extends ServiceImpl<CoCloudFileMapper, CoCloudFile>
         CoCloudFile record = doSaveFile(context.getFilename(), context.getRealPath(), context.getTotalSize(), context.getIdentifier(), context.getUserId());
         context.setRecord(record);
     }
+
+    /**
+     * 合并物理文件并保存物理文件记录
+     * <p>
+     * 1. 委托文件存储引擎合并文件分片
+     * 2. 保存物理文件记录
+     *
+     * @param context
+     */
+    @Override
+    public void mergeFileChunkAndSaveFile(FileChunkMergeAndSaveContext context) {
+        doMergeFileChunk(context);
+        CoCloudFile record = doSaveFile(context.getFilename(), context.getRealPath(), context.getTotalSize(), context.getIdentifier(), context.getUserId());
+        context.setRecord(record);
+    }
+
 
     /* =============> private <============= */
 
@@ -168,6 +195,64 @@ public class FileServiceImpl extends ServiceImpl<CoCloudFileMapper, CoCloudFile>
 
         return record;
     }
+
+    /**
+     * 委托文件存储引擎合并文件分片
+     * <p>
+     * 1. 查询文件分片的记录
+     * 2. 根据文件分片的记录去合并物理文件
+     * 3. 删除文件分片记录
+     * 4. 封装合并文件的真实存储路径到上下文信息中
+     *
+     * @param context
+     */
+    private void doMergeFileChunk(FileChunkMergeAndSaveContext context) {
+        // 查询数据库的分片信息
+        QueryWrapper<CoCloudFileChunk> queryWrapper = Wrappers.query();
+        // identifier
+        queryWrapper.eq("identifier", context.getIdentifier());
+        // create_user
+        queryWrapper.eq("create_user", context.getUserId());
+        // expiration_time 大于等于当前时间
+        queryWrapper.ge("expiration_time", new Date());
+
+        // 获取chunkRecordedList，交给iFileChunkService
+        List<CoCloudFileChunk> chunkRecordedList = iFileChunkService.list(queryWrapper);
+
+        // 判断是否存在
+        if (CollectionUtils.isEmpty(chunkRecordedList)) {
+            throw new CoCloudBusinessException("未找到分片记录");
+        }
+
+        // 从chunkRecordedList获取realPathList，用于合并
+        List<String> realPathList = chunkRecordedList.stream()
+                // 根据chunkNumber进行排序，在存储引擎中直接合并即可
+                .sorted(Comparator.comparing(CoCloudFileChunk::getChunkNumber)).map(CoCloudFileChunk::getRealPath).collect(Collectors.toList());
+
+        // 委托给存储引擎实现
+        try {
+            // 创建mergeFileContext
+            MergeFileContext mergeFileContext = new MergeFileContext();
+            // set属性
+            mergeFileContext.setFilename(context.getFilename());
+            mergeFileContext.setIdentifier(context.getIdentifier());
+            mergeFileContext.setUserId(context.getUserId());
+            mergeFileContext.setRealPathList(realPathList);
+            // 交给存储引擎
+            storageEngine.mergeFile(mergeFileContext);
+            // 合并之后返回realPath，添加到context中
+            context.setRealPath(mergeFileContext.getRealPath());
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new CoCloudBusinessException("文件分片合并失败");
+        }
+
+        // 从chunkRecordedList获取ID，用于删除数据库分片文件
+        List<Long> fileChunkRecordIdList = chunkRecordedList.stream().map(CoCloudFileChunk::getId).collect(Collectors.toList());
+
+        iFileChunkService.removeByIds(fileChunkRecordIdList);
+    }
+
 
 }
 

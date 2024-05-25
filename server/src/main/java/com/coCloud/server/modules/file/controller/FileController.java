@@ -1,5 +1,6 @@
 package com.coCloud.server.modules.file.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.coCloud.core.constants.CoCloudConstants;
 import com.coCloud.core.response.R;
 import com.coCloud.core.utils.IdUtil;
@@ -11,6 +12,8 @@ import com.coCloud.server.modules.file.enums.DelFlagEnum;
 import com.coCloud.server.modules.file.po.*;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
+import com.coCloud.server.modules.file.vo.FileChunkUploadVO;
+import com.coCloud.server.modules.file.vo.UploadedChunksVO;
 import com.google.common.base.Splitter;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -137,6 +140,45 @@ public class FileController {
     public R upload(@Validated FileUploadPO fileUploadPO) {
         FileUploadContext context = fileConverter.fileUploadPO2FileUploadContext(fileUploadPO);
         iUserFileService.upload(context);
+        return R.success();
+    }
+
+    @ApiOperation(
+            value = "文件分片上传",
+            notes = "该接口提供了文件分片上传的功能",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @PostMapping("file/chunk-upload")
+    public R<FileChunkUploadVO> chunkUpload(@Validated FileChunkUploadPO fileChunkUploadPO) {
+        FileChunkUploadContext context = fileConverter.fileChunkUploadPO2FileChunkUploadContext(fileChunkUploadPO);
+        FileChunkUploadVO vo = iUserFileService.chunkUpload(context);
+        return R.data(vo);
+    }
+
+    @ApiOperation(
+            value = "查询已经上传的文件分片列表",
+            notes = "该接口提供了查询已经上传的文件分片列表的功能",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @GetMapping("file/chunk-upload")
+    public R<UploadedChunksVO> getUploadedChunks(@Validated QueryUploadedChunksPO queryUploadedChunksPO) {
+        QueryUploadedChunksContext context = fileConverter.queryUploadedChunksPO2QueryUploadedChunksContext(queryUploadedChunksPO);
+        UploadedChunksVO vo = iUserFileService.getUploadedChunks(context);
+        return R.data(vo);
+    }
+
+    @ApiOperation(
+            value = "文件分片合并",
+            notes = "该接口提供了文件分片合并的功能",
+            consumes = MediaType.APPLICATION_JSON_UTF8_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @PostMapping("file/merge")
+    public R mergeFile(@Validated @RequestBody FileChunkMergePO fileChunkMergePO) {
+        FileChunkMergeContext context = fileConverter.fileChunkMergePO2FileChunkMergeContext(fileChunkMergePO);
+        iUserFileService.mergeFile(context);
         return R.success();
     }
 
