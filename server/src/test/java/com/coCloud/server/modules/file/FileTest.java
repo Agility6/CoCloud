@@ -15,6 +15,7 @@ import com.coCloud.server.modules.file.service.IFileService;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
 import com.coCloud.server.modules.file.vo.FileChunkUploadVO;
+import com.coCloud.server.modules.file.vo.FolderTreeNodeVO;
 import com.coCloud.server.modules.file.vo.UploadedChunksVO;
 import com.coCloud.server.modules.user.context.UserLoginContext;
 import com.coCloud.server.modules.user.context.UserRegisterContext;
@@ -438,6 +439,104 @@ public class FileTest {
 
         countDownLatch.await();
 
+    }
+
+    /**
+     * 测试文件夹树查询
+     */
+    @Test
+    public void getFolderTreeNodeVOListTest() {
+
+        Long userId = register();
+        UserInfoVO userInfoVO = info(userId);
+
+        CreateFolderContext context = new CreateFolderContext();
+        context.setParentId(userInfoVO.getRootFileId());
+        context.setUserId(userId);
+        context.setFolderName("folder-name-1");
+
+        Long fileId = iUserFileService.createFolder(context);
+        Assert.notNull(fileId);
+
+        context.setFolderName("folder-name-2");
+
+        fileId = iUserFileService.createFolder(context);
+        Assert.notNull(fileId);
+
+        context.setFolderName("folder-name-2-1");
+        context.setParentId(fileId);
+
+        iUserFileService.createFolder(context);
+        Assert.notNull(fileId);
+
+        QueryFolderTreeContext queryFolderTreeContext = new QueryFolderTreeContext();
+        queryFolderTreeContext.setUserId(userId);
+        List<FolderTreeNodeVO> folderTree = iUserFileService.getFolderTree(queryFolderTreeContext);
+
+        Assert.isTrue(folderTree.size() == 1);
+        folderTree.stream().forEach(FolderTreeNodeVO::print);
+    }
+
+    /**
+     * 测试文件转移成功
+     */
+    @Test
+    public void testTransferFileSuccess() {
+        Long userId = register();
+        UserInfoVO userInfoVO = info(userId);
+
+        CreateFolderContext context = new CreateFolderContext();
+        context.setParentId(userInfoVO.getRootFileId());
+        context.setUserId(userId);
+        context.setFolderName("folder-name-1");
+
+        Long folder1 = iUserFileService.createFolder(context);
+        Assert.notNull(folder1);
+
+        context.setFolderName("folder-name-2");
+        Long folder2 = iUserFileService.createFolder(context);
+        Assert.notNull(folder2);
+
+        TransferFileContext transferFileContext = new TransferFileContext();
+        transferFileContext.setTargetParentId(folder1);
+        transferFileContext.setFileIdList(Lists.newArrayList(folder2));
+        transferFileContext.setUserId(userId);
+        iUserFileService.transfer(transferFileContext);
+
+        QueryFileListContext queryFileListContext = new QueryFileListContext();
+        queryFileListContext.setParentId(userInfoVO.getRootFileId());
+        queryFileListContext.setUserId(userId);
+        queryFileListContext.setDelFlag(DelFlagEnum.NO.getCode());
+        List<CoCloudUserFileVO> records = iUserFileService.getFileList(queryFileListContext);
+        Assert.notEmpty(records);
+    }
+
+    /**
+     * 测试文件转移失败，目标文件夹是要转移的文件列表中的文件夹或者是其子文件夹
+     */
+    @Test(expected = CoCloudBusinessException.class)
+    public void testTransferFileFail() {
+        Long userId = register();
+        UserInfoVO userInfoVO = info(userId);
+
+        CreateFolderContext context = new CreateFolderContext();
+        context.setParentId(userInfoVO.getRootFileId());
+        context.setUserId(userId);
+        context.setFolderName("folder-name-1");
+
+        Long folder1 = iUserFileService.createFolder(context);
+        Assert.notNull(folder1);
+
+        context.setParentId(folder1);
+        context.setFolderName("folder-name-2");
+        Long folder2 = iUserFileService.createFolder(context);
+        Assert.notNull(folder2);
+
+        TransferFileContext transferFileContext = new TransferFileContext();
+        transferFileContext.setTargetParentId(folder2);
+        transferFileContext.setFileIdList(Lists.newArrayList(folder1));
+        transferFileContext.setUserId(userId);
+        iUserFileService.transfer(transferFileContext);
     }
 
     /* =============> private <============= */
