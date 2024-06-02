@@ -1,9 +1,6 @@
 package com.coCloud.storage.engine.core;
 
-import com.coCloud.storage.engine.core.context.DeleteFileContext;
-import com.coCloud.storage.engine.core.context.MergeFileContext;
-import com.coCloud.storage.engine.core.context.StoreFileChunkContext;
-import com.coCloud.storage.engine.core.context.StoreFileContext;
+import com.coCloud.storage.engine.core.context.*;
 
 import java.io.IOException;
 
@@ -48,4 +45,11 @@ public interface StorageEngine {
      * @param context
      */
     void mergeFile(MergeFileContext context) throws IOException;
+
+    /**
+     * 读取文件内容写入到输出流中
+     *
+     * @param context
+     */
+    void realFile(ReadFileContext context) throws IOException;
 }

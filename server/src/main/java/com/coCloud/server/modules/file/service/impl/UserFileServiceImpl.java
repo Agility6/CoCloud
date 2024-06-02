@@ -1,6 +1,5 @@
 package com.coCloud.server.modules.file.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -10,6 +9,8 @@ import com.coCloud.core.exception.CoCloudBusinessException;
 import com.coCloud.core.utils.FileUtils;
 import com.coCloud.core.utils.IdUtil;
 import com.coCloud.server.common.event.file.DeleteFileEvent;
+import com.coCloud.server.common.event.search.UserSearchEvent;
+import com.coCloud.server.common.utils.HttpUtil;
 import com.coCloud.server.modules.file.constants.FileConstants;
 import com.coCloud.server.modules.file.context.*;
 import com.coCloud.server.modules.file.converter.FileConverter;
@@ -22,18 +23,28 @@ import com.coCloud.server.modules.file.service.IFileChunkService;
 import com.coCloud.server.modules.file.service.IFileService;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.file.mapper.CoCloudUserFileMapper;
-import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
-import com.coCloud.server.modules.file.vo.FileChunkUploadVO;
-import com.coCloud.server.modules.file.vo.UploadedChunksVO;
+import com.coCloud.server.modules.file.vo.*;
+import com.coCloud.storage.engine.core.StorageEngine;
+import com.coCloud.storage.engine.core.context.ReadFileContext;
+import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.assertj.core.internal.NioFilesWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import sun.util.resources.bg.LocaleNames_bg;
 
+import javax.servlet.http.HttpServletResponse;
+import java.awt.*;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.UnknownServiceException;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +65,9 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
 
     @Autowired
     private FileConverter fileConverter;
+
+    @Autowired
+    private StorageEngine storageEngine;
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) {
@@ -233,15 +247,184 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
         // 文件分片物理合并
         mergeFileChunkAndSaveFile(context);
         // 保存文件用户关系映射
-        saveUserFile(context.getParentId(),
-                context.getFilename(),
-                FolderFlagEnum.NO,
-                FileTypeEnum.getFileTypeCode(FileUtils.getFileSuffix(context.getFilename())),
-                context.getRecord().getFileId(),
-                context.getUserId(),
-                context.getRecord().getFileSizeDesc());
+        saveUserFile(context.getParentId(), context.getFilename(), FolderFlagEnum.NO, FileTypeEnum.getFileTypeCode(FileUtils.getFileSuffix(context.getFilename())), context.getRecord().getFileId(), context.getUserId(), context.getRecord().getFileSizeDesc());
     }
 
+    /**
+     * 文件下载
+     * <p>
+     * 1. 参数校验：校验文件是否存在，文件是否属于该用户
+     * 2. 校验该文件是不是一个文件夹
+     * 3. 执行下载动作
+     *
+     * @param context
+     */
+    @Override
+    public void download(FileDownloadContext context) {
+        // 通过fileId获取UserFile
+        CoCloudUserFile record = getById(context.getFileId());
+        // 验证文件是否属于该用户
+        checkOperatePermission(record, context.getUserId());
+        // 校验文件是否是一个文件夹
+        if (checkIsFolder(record)) {
+            throw new CoCloudBusinessException("文件暂不支持下载");
+        }
+        // 执行下载
+        doDownload(record, context.getResponse());
+    }
+
+    /**
+     * 文件预览
+     * <p>
+     * 1. 参数校验：校验文件是否存在，文件是否属于该用户
+     * 2. 校验该文件是不是一个文件夹
+     * 3. 执行预览动作
+     *
+     * @param context
+     */
+    @Override
+    public void preview(FilePreviewContext context) {
+        CoCloudUserFile record = getById(context.getFileId());
+        checkOperatePermission(record, context.getUserId());
+        if (checkIsFolder(record)) {
+            throw new CoCloudBusinessException("文件夹暂不支持预览");
+        }
+        doPreview(record, context.getResponse());
+    }
+
+    /**
+     * 查询用户的文件夹树
+     * <p>
+     * 1. 查询出该用户的所有文件夹列表
+     * 2. 在内存中拼装文件树
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public List<FolderTreeNodeVO> getFolderTree(QueryFolderTreeContext context) {
+        List<CoCloudUserFile> folderRecords = queryFolderRecords(context.getUserId());
+        List<FolderTreeNodeVO> result = assembleFolderTreeNodeVOList(folderRecords);
+        return result;
+    }
+
+    /**
+     * 文件转移
+     * <p>
+     * 1. 权限校验
+     * 2. 执行工作
+     *
+     * @param context
+     */
+    @Override
+    public void transfer(TransferFileContext context) {
+        checkTransferCondition(context);
+        doTransfer(context);
+    }
+
+    /**
+     * 文件复制
+     * <p>
+     * 1. 条件校验
+     * 2. 执行动作
+     *
+     * @param context
+     */
+    @Override
+    public void copy(CopyFileContext context) {
+        checkCopyCondition(context);
+        doCopy(context);
+    }
+
+    /**
+     * 文件列表搜素
+     * <p>
+     * 1. 执行文件搜素
+     * 2. 拼装文件的父文件名称
+     * 3. 执行文件搜素后的后置动作
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public List<FileSearchResultVO> search(FileSearchContext context) {
+        List<FileSearchResultVO> result = doSearch(context);
+        // 可能存在不同父文件中有相同文件名称
+        fillParentFilename(result);
+        afterSearch(context);
+        return null;
+    }
+
+    /**
+     * 获取面包屑列表
+     * <p>
+     * 1. 获取用户所有文件夹信息
+     * 2. 拼接需要用到的面包屑的列表
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public List<BreadcrumbVO> getBreadcrumbs(QueryBreadcrumbsContext context) {
+        // 获取当前用户的所有文件夹
+        List<CoCloudUserFile> folderRecords = queryFolderRecords(context.getUserId());
+        // 将文件夹记录转换为 BreadcrumbVO 对象并存储到 Map 中
+        Map<Long, BreadcrumbVO> prepareBreadcrumbVOMap = folderRecords.stream().map(BreadcrumbVO::transfer).collect(Collectors.toMap(BreadcrumbVO::getId, a -> a));
+
+        // 初始化面包屑列表
+        BreadcrumbVO currentNode;
+        Long fileId = context.getFileId();
+        LinkedList<BreadcrumbVO> result = Lists.newLinkedList();
+
+        // 遍历父文件夹链条，生成面包屑列表
+        do {
+           currentNode = prepareBreadcrumbVOMap.get(fileId);
+           if (Objects.nonNull(currentNode)) {
+               // 将当前节点添加到结果的开头
+               result.add(0, currentNode);
+               // 更新 fileId 为当前节点的父节点ID
+               fileId = currentNode.getParentId();
+           }
+        } while (Objects.nonNull(currentNode));
+        return result;
+    }
+
+    /**
+     * 搜索的后置操作
+     * <p>
+     * 1. 发布文件搜索事件
+     *
+     * @param context
+     */
+    private void afterSearch(FileSearchContext context) {
+        UserSearchEvent event = new UserSearchEvent(this, context.getKeyword(), context.getUserId());
+        applicationContext.publishEvent(event);
+    }
+
+    /**
+     * 填充文件列表的父文件名称
+     *
+     * @param result
+     */
+    private void fillParentFilename(List<FileSearchResultVO> result) {
+        if (CollectionUtils.isEmpty(result)) {
+            return;
+        }
+        List<Long> parentIdList = result.stream().map(FileSearchResultVO::getParentId).collect(Collectors.toList());
+        List<CoCloudUserFile> parentRecords = listByIds(parentIdList);
+        Map<Long, String> fileId2filenameMap = parentRecords.stream().collect(Collectors.toMap(CoCloudUserFile::getFileId, CoCloudUserFile::getFilename));
+        result.stream().forEach(vo -> vo.setParentFilename(fileId2filenameMap.get(vo.getParentId())));
+    }
+
+    /**
+     * 搜素文件列表
+     *
+     * @param context
+     * @return
+     */
+    private List<FileSearchResultVO> doSearch(FileSearchContext context) {
+        return baseMapper.searchFile(context);
+    }
 
     /* =============> private <============= */
 
@@ -560,9 +743,386 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
         context.setRecord(fileChunkMergeAndSaveContext.getRecord());
     }
 
+    /**
+     * 执行文件下载的动作
+     * <p>
+     * 1. 查询文件的真实存储路径
+     * 2. 添加跨域的公共响应头
+     * 3. 拼装下载文件的名称，长度等等响应信息
+     * 4. 委托文件存储引擎去读取文件内容响应的输出流中
+     *
+     * @param record
+     * @param response
+     */
+    private void doDownload(CoCloudUserFile record, HttpServletResponse response) {
+        // 通过RealFileId获取realFileRecord
+        CoCloudFile realFileRecord = iFileService.getById(record.getRealFileId());
+        // 添加公共的文件读取响应头
+        addCommonResponseHeader(response, MediaType.APPLICATION_OCTET_STREAM_VALUE);
+        // 添加文件下载的属性信息
+        addDownloadAttribute(response, record, realFileRecord);
+        // 委托文件存储引擎去读取文件内容并写入到输出流中
+        realFile2OutputStream(realFileRecord.getRealPath(), response);
+    }
 
+    /**
+     * 委托文件存储引擎去读取文件内容并写入到输出流中
+     *
+     * @param realPath
+     * @param response
+     */
+    private void realFile2OutputStream(String realPath, HttpServletResponse response) {
+        try {
+            // 创建readFileContext
+            ReadFileContext context = new ReadFileContext();
+            // set属性
+            context.setRealPath(realPath);
+            context.setOutputStream(response.getOutputStream());
+            // 委托引擎处理
+            storageEngine.realFile(context);
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new CoCloudBusinessException("文件下载失败");
+        }
+    }
+
+    /**
+     * 添加文件下载的属性信息
+     *
+     * @param response
+     * @param record
+     * @param realFileRecord
+     */
+    private void addDownloadAttribute(HttpServletResponse response, CoCloudUserFile record, CoCloudFile realFileRecord) {
+        try {
+            response.addHeader(FileConstants.CONTENT_DISPOSITION_STR, FileConstants.CONTENT_DISPOSITION_VALUE_PREFIX_STR + new String(record.getFilename().getBytes(FileConstants.GB2312_STR), FileConstants.IOS_8859_1_STR));
+        } catch (UnsupportedEncodingException e) {
+            // 编码不支持
+            throw new CoCloudBusinessException("文件下载失败");
+        }
+        // 设置下载的长度
+        response.setContentLengthLong(Long.valueOf(realFileRecord.getFileSize()));
+    }
+
+    /**
+     * 添加公共的文件读取响应头
+     *
+     * @param response
+     * @param contentTypeValue
+     */
+    private void addCommonResponseHeader(HttpServletResponse response, String contentTypeValue) {
+        // 清除之前的任何数据和头信息
+        response.reset();
+        // 添加跨域相关的响应头
+        HttpUtil.addCorsResponseHeaders(response);
+        // 添加报文主体的对象类型
+        response.addHeader(FileConstants.CONTENT_TYPE_STR, contentTypeValue);
+        // 设置响应对象的内容类型
+        response.setContentType(contentTypeValue);
+    }
+
+    /**
+     * 检查当前文件记录是不是一个文件夹
+     *
+     * @param record
+     * @return
+     */
+    private boolean checkIsFolder(CoCloudUserFile record) {
+        if (Objects.isNull(record)) {
+            throw new CoCloudBusinessException("当前文件记录不存在");
+        }
+        return FolderFlagEnum.YES.getCode().equals(record.getFolderFlag());
+    }
+
+    /**
+     * 校验用户的操作权限
+     * <p>
+     * 1. 文件记录必须存在
+     * 2. 文件记录的创建者必须是该登录用户
+     *
+     * @param record
+     * @param userId
+     */
+    private void checkOperatePermission(CoCloudUserFile record, Long userId) {
+        if (Objects.isNull(record)) {
+            throw new CoCloudBusinessException("当前文件记录不存在");
+        }
+        if (!record.getUserId().equals(userId)) {
+            throw new CoCloudBusinessException("您当前没有操作权限");
+        }
+    }
+
+    /**
+     * 执行文件预览的动作
+     * <p>
+     * 1. 查询文件的真实存储路径
+     * 2. 添加跨域的公共响应头
+     * 3. 委托文件存储引擎去读取文件内容到响应的输出流中
+     *
+     * @param record
+     * @param response
+     */
+    private void doPreview(CoCloudUserFile record, HttpServletResponse response) {
+        // 获取realFileRecord
+        CoCloudFile realFileRecord = iFileService.getById(record.getRealFileId());
+        if (Objects.isNull(realFileRecord)) {
+            throw new CoCloudBusinessException("当前的文件记录不存在");
+        }
+        // 添加跨域公共响应头
+        addCommonResponseHeader(response, realFileRecord.getFilePreviewContentType());
+        realFile2OutputStream(realFileRecord.getRealPath(), response);
+
+    }
+
+    /**
+     * 拼装文件夹树列表
+     *
+     * @param folderRecords
+     * @return
+     */
+    private List<FolderTreeNodeVO> assembleFolderTreeNodeVOList(List<CoCloudUserFile> folderRecords) {
+        if (CollectionUtils.isEmpty(folderRecords)) {
+            return Lists.newArrayList();
+        }
+        List<FolderTreeNodeVO> mappedFolderTreeNodeVOList = folderRecords.stream().map(fileConverter::coCloudUserFile2FolderTreeNodeVO).collect(Collectors.toList());
+        // 通过parentId分组 ==> parentId等于上一层File的ID
+        Map<Long, List<FolderTreeNodeVO>> mappedFolderTreeNodeVOMap = mappedFolderTreeNodeVOList.stream().collect(Collectors.groupingBy(FolderTreeNodeVO::getParentId));
+        for (FolderTreeNodeVO node : mappedFolderTreeNodeVOList) {
+            // 当前File的子节点等于Map中Key为当前文件Id的集合
+            List<FolderTreeNodeVO> children = mappedFolderTreeNodeVOMap.get(node.getId());
+            if (CollectionUtils.isNotEmpty(children)) {
+                node.getChildren().addAll(children);
+            }
+        }
+        // 顶层节点过滤返回
+        return mappedFolderTreeNodeVOList.stream().filter(node -> Objects.equals(node.getParentId(), FileConstants.TOP_PARENT_ID)).collect(Collectors.toList());
+    }
+
+    /**
+     * 查询用户所有有效的文件夹信息
+     *
+     * @param userId
+     * @return
+     */
+    private List<CoCloudUserFile> queryFolderRecords(Long userId) {
+        QueryWrapper queryWrapper = Wrappers.query();
+        queryWrapper.eq("user_id", userId);
+        queryWrapper.eq("folder_flag", FolderFlagEnum.YES.getCode());
+        queryWrapper.eq("del_flag", DelFlagEnum.NO.getCode());
+        return list(queryWrapper);
+    }
+
+    /***
+     * 执行文件复制动作
+     *
+     * @param context
+     */
+    private void doCopy(CopyFileContext context) {
+        // 获取要转移文件列表的实体对象
+        List<CoCloudUserFile> prepareRecords = context.getPrepareRecords();
+        if (CollectionUtils.isNotEmpty(prepareRecords)) {
+            List<CoCloudUserFile> allRecords = Lists.newArrayList();
+            prepareRecords.stream()
+                    // 装配
+                    .forEach(record -> assembleCopyChildRecord(allRecords, record, context.getTargetParentId(), context.getUserId()));
+            if (!saveBatch(allRecords)) {
+                throw new CoCloudBusinessException("文件复制失败");
+            }
+        }
+    }
+
+    /**
+     * 拼装当前文件记录以及所有的子文件记录
+     *
+     * @param allRecords
+     * @param record
+     * @param targetParentId
+     * @param userId
+     */
+    private void assembleCopyChildRecord(List<CoCloudUserFile> allRecords, CoCloudUserFile record, Long targetParentId, Long userId) {
+        // 获取新文件的ID
+        Long newFileId = IdUtil.get();
+        // 获取旧文件的ID
+        Long oldFileId = record.getFileId();
+
+        // Set属性到record中
+        record.setParentId(targetParentId);
+        record.setFileId(newFileId);
+        record.setUserId(userId);
+        record.setCreateUser(userId);
+        record.setCreateTime(new Date());
+        record.setUpdateUser(userId);
+        record.setUpdateTime(new Date());
+        // 处理重命名
+        handleDuplicateFilename(record);
+
+        // 将record存入allRecords中
+        allRecords.add(record);
+
+        // 如果当前record是文件，需要递归处理
+        if (checkIsFolder(record)) {
+            // 查找下一级的文件记录
+            List<CoCloudUserFile> childRecords = findChildRecords(oldFileId);
+            // 如果不为空那么递归处理
+            if (CollectionUtils.isEmpty(childRecords)) {
+                return;
+            }
+            childRecords.stream().forEach(childRecord -> assembleCopyChildRecord(allRecords, childRecord, newFileId, userId));
+        }
+    }
+
+    /**
+     * 查找下一级的文件记录
+     *
+     * @param parentId
+     * @return
+     */
+    private List<CoCloudUserFile> findChildRecords(Long parentId) {
+        QueryWrapper queryWrapper = Wrappers.query();
+        // 文件的parentId
+        queryWrapper.eq("parent_id", parentId);
+        // 不是删除状态
+        queryWrapper.eq("del_flag", DelFlagEnum.NO.getCode());
+        return list(queryWrapper);
+    }
+
+    /**
+     * 文件转移的条件校验
+     * <p>
+     * 1. 目标文件夹必须是一个文件夹
+     * 2. 选中要转移的文件列表找中不能含有目标文件夹以及其其子文件夹
+     *
+     * @param context
+     */
+    private void checkCopyCondition(CopyFileContext context) {
+        // 获取目标文件夹的ID
+        Long targetParentId = context.getTargetParentId();
+        // 校验是否是文件交
+        if (!checkIsFolder(getById(targetParentId))) {
+            throw new CoCloudBusinessException("目标文件不是一个文件夹");
+        }
+
+        // 获取要转移的文件夹列表ID
+        List<Long> fileIdList = context.getFileIdList();
+        // 通过列表ID获取要转移文件列表的实体对象prepareRecords
+        List<CoCloudUserFile> prepareRecords = listByIds(fileIdList);
+        // 将prepareRecords放入到context中
+        context.setPrepareRecords(prepareRecords);
+        // checkIsChildFolder
+        if (checkIsChildFolder(prepareRecords, targetParentId, context.getUserId())) {
+            throw new CoCloudBusinessException("目标文件夹ID不能是选中文件列表的文件ID或其子文件夹ID");
+        }
+    }
+
+    /**
+     * 执行文件转移的动作
+     *
+     * @param context
+     */
+    private void doTransfer(TransferFileContext context) {
+        // 获取要转移的文件列表
+        List<CoCloudUserFile> prepareRecords = context.getPrepareRecords();
+        // 逐一修改属性
+        prepareRecords.stream().forEach(record -> {
+            // 修改文件的ParentId
+            record.setParentId(context.getTargetParentId());
+            record.setUserId(context.getUserId());
+            record.setCreateUser(context.getUserId());
+            record.setCreateTime(new Date());
+            record.setUpdateUser(context.getUserId());
+            record.setUpdateTime(new Date());
+            // 处理文件夹重名
+            handleDuplicateFilename(record);
+        });
+        if (!updateBatchById(prepareRecords)) {
+            throw new CoCloudBusinessException("文件转移失败");
+        }
+
+    }
+
+    /**
+     * 文件转移的条件校验
+     * <p>
+     * 1. 目标文件必须是一个文件夹
+     * 2. 选中的要转移的文件列表中不能含有目标文件及其子文件夹
+     *
+     * @param context
+     */
+    private void checkTransferCondition(TransferFileContext context) {
+        // 获取目标位置的parentId
+        Long targetParentId = context.getTargetParentId();
+        // 判断是不是文件夹
+        if (!checkIsFolder(getById(targetParentId))) {
+            throw new CoCloudBusinessException("目标文件不是一个文件夹");
+        }
+        // 获取要转移的文件ID集合
+        List<Long> fileIdList = context.getFileIdList();
+        // 通过文件ID集合获取要转移的文件列表
+        List<CoCloudUserFile> prepareRecords = listByIds(fileIdList);
+        // 将要转移的文件列表实体放入context中
+        context.setPrepareRecords(prepareRecords);
+
+        // 检查要转移的文件夹是否合法
+        if (checkIsChildFolder(prepareRecords, targetParentId, context.getUserId())) {
+            throw new CoCloudBusinessException("目标文件夹ID不能是选中文件列表的文件夹ID或其子文件夹ID");
+        }
+    }
+
+    /**
+     * 校验目标文件夹ID是否是要操作的文件记录的文件夹ID以及其子文件夹ID
+     * <p>
+     * 1. 如果要操作的文件列表中没有文件夹，那么就直接返回false
+     * 2. 拼装文件夹ID以及所有子文件夹ID，判断存在即可
+     *
+     * @param prepareRecords
+     * @param targetParentId
+     * @param userId
+     * @return
+     */
+    private boolean checkIsChildFolder(List<CoCloudUserFile> prepareRecords, Long targetParentId, Long userId) {
+        // 将prepareRecords过滤只保留文件夹
+        prepareRecords = prepareRecords.stream().filter(record -> Objects.equals(record.getFolderFlag(), FolderFlagEnum.YES.getCode())).collect(Collectors.toList());
+        // 判断是否为空，如果为空直接返回false
+        if (CollectionUtils.isEmpty(prepareRecords)) {
+            return false;
+        }
+
+        // 通过用户ID查询用户所有有效的文件夹信息
+        List<CoCloudUserFile> coCloudUserFiles = queryFolderRecords(userId);
+        // 通过parentId作为key构建Map集合
+        Map<Long, List<CoCloudUserFile>> folderRecordMap = coCloudUserFiles.stream().collect(Collectors.groupingBy(CoCloudUserFile::getParentId));
+
+        // 创建一个列表，用于存储所有不可用的文件夹记录
+        List<CoCloudUserFile> unavailableFolderRecords = Lists.newArrayList();
+        unavailableFolderRecords.addAll(prepareRecords);
+
+        // 递归查找并收集所有子文件夹记录
+        prepareRecords.stream().forEach(record -> findAllChildFolderRecords(unavailableFolderRecords, folderRecordMap, record));
+
+        // 从不可用的文件夹记录中提取文件夹 ID 列表
+        List<Long> unavailableFolderRecordIds = unavailableFolderRecords.stream().map(CoCloudUserFile::getFileId).collect(Collectors.toList());
+        return unavailableFolderRecordIds.contains(targetParentId);
+    }
+
+    /**
+     * 查询文件夹的所有子文件夹记录
+     *
+     * @param unavailableFolderRecords
+     * @param folderRecordMap
+     * @param record
+     */
+    private void findAllChildFolderRecords(List<CoCloudUserFile> unavailableFolderRecords, Map<Long, List<CoCloudUserFile>> folderRecordMap, CoCloudUserFile record) {
+        if (Objects.isNull(record)) {
+            return;
+        }
+        // 获取当前文件夹的子文件夹
+        List<CoCloudUserFile> childFolderRecords = folderRecordMap.get(record.getFileId());
+        if (CollectionUtils.isEmpty(childFolderRecords)) {
+            return;
+        }
+        unavailableFolderRecords.addAll(childFolderRecords);
+        // 递归调用
+        childFolderRecords.stream().forEach(childRecord -> findAllChildFolderRecords(unavailableFolderRecords, folderRecordMap, childRecord));
+
+    }
 }
-
-
-
-

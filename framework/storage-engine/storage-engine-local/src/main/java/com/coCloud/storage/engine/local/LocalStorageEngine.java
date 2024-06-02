@@ -2,15 +2,13 @@ package com.coCloud.storage.engine.local;
 
 import com.coCloud.core.utils.FileUtils;
 import com.coCloud.storage.engine.core.AbstractStorageEngine;
-import com.coCloud.storage.engine.core.context.DeleteFileContext;
-import com.coCloud.storage.engine.core.context.MergeFileContext;
-import com.coCloud.storage.engine.core.context.StoreFileChunkContext;
-import com.coCloud.storage.engine.core.context.StoreFileContext;
+import com.coCloud.storage.engine.core.context.*;
 import com.coCloud.storage.engine.local.config.LocalStorageEngineConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.List;
@@ -76,13 +74,14 @@ public class LocalStorageEngine extends AbstractStorageEngine {
 
     /**
      * 执行文件分片动作
+     *
      * @param context
      * @throws IOException
      */
     @Override
     protected void doMergeFile(MergeFileContext context) throws IOException {
         // 获取基础路径
-        String basePath= config.getRootFilePath();
+        String basePath = config.getRootFilePath();
         // 生成真实路径
         String realFilePath = FileUtils.generateStoreFileRealPath(basePath, context.getFilename());
         // 创建文件
@@ -100,5 +99,19 @@ public class LocalStorageEngine extends AbstractStorageEngine {
         // context设置合并完成后的路径
         context.setRealPath(realFilePath);
 
+    }
+
+    /**
+     * 读取文件内容并写入到输出流中
+     *
+     * @param context
+     * @throws IOException
+     */
+    @Override
+    protected void doReadFile(ReadFileContext context) throws IOException {
+        // 获取文件
+        File file = new File(context.getRealPath());
+        // 写入到输出流中
+        FileUtils.writeFile2OutputStream(new FileInputStream(file), context.getOutputStream(), file.length());
     }
 }

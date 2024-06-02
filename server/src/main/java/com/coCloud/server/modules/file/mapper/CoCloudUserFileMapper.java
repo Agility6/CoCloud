@@ -1,9 +1,11 @@
 package com.coCloud.server.modules.file.mapper;
 
+import com.coCloud.server.modules.file.context.FileSearchContext;
 import com.coCloud.server.modules.file.context.QueryFileListContext;
 import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
+import com.coCloud.server.modules.file.vo.FileSearchResultVO;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -23,6 +25,14 @@ public interface CoCloudUserFileMapper extends BaseMapper<CoCloudUserFile> {
      * @return
      */
     List<CoCloudUserFileVO> selectFileList(@Param("param") QueryFileListContext context);
+
+    /**
+     * 文件搜素
+     *
+     * @param context
+     * @return
+     */
+    List<FileSearchResultVO> searchFile(FileSearchContext context);
 }
 
 

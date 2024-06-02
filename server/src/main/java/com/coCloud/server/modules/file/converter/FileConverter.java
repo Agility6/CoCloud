@@ -1,10 +1,14 @@
 package com.coCloud.server.modules.file.converter;
 
 import com.coCloud.server.modules.file.context.*;
+import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.coCloud.server.modules.file.po.*;
+import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
+import com.coCloud.server.modules.file.vo.FolderTreeNodeVO;
 import com.coCloud.storage.engine.core.context.StoreFileChunkContext;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.springframework.boot.actuate.autoconfigure.web.server.ConditionalOnManagementPort;
 import org.springframework.jmx.export.annotation.ManagedOperation;
 
 import java.util.Map;
@@ -64,4 +68,9 @@ public interface FileConverter {
 
 
     FileChunkMergeAndSaveContext fileChunkMergeContext2FileChunkMergeAndSaveContext(FileChunkMergeContext context);
+
+    @Mapping(target = "label", source = "record.filename")
+    @Mapping(target = "id", source = "record.fileId")
+    @Mapping(target = "children", expression = "java(com.google.common.collect.Lists.newArrayList())")
+    FolderTreeNodeVO coCloudUserFile2FolderTreeNodeVO(CoCloudUserFile record);
 }
