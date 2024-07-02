@@ -22,25 +22,28 @@ import java.util.Objects;
 public class FileUtils {
 
     /**
-     * 获取文件的后缀
+     * 获取文件的后缀（包括点号）
      *
-     * @param filename
-     * @return
+     * @param filename 文件名
+     * @return 文件后缀（包括点号），如果文件名为空或不包含点号，则返回空字符串
      */
     public static String getFileSuffix(String filename) {
+        // 检查文件名是否为空或者不包含点号
         if (StringUtils.isBlank(filename) || filename.lastIndexOf(CoCloudConstants.POINT_STR) == CoCloudConstants.MINUS_ONE_INT) {
             return CoCloudConstants.EMPTY_STR;
         }
+        // 返回文件名中最后一个点号之后的部分，并转为小写
         return filename.substring(filename.lastIndexOf(CoCloudConstants.POINT_STR)).toLowerCase();
     }
 
     /**
-     * 获取文件的类型
+     * 获取文件的类型（后缀，不包括点号）
      *
-     * @param filename
-     * @return
+     * @param filename 文件名
+     * @return 文件后缀（不包括点号），如果文件名为空或不包含点号，则返回空字符串
      */
     public static String getFileExtName(String filename) {
+        // 检查文件名是否为空或者不包含点号
         if (StringUtils.isBlank(filename) || filename.lastIndexOf(CoCloudConstants.POINT_STR) == CoCloudConstants.MINUS_ONE_INT) {
             return CoCloudConstants.EMPTY_STR;
         }
@@ -50,8 +53,8 @@ public class FileUtils {
     /**
      * 通过文件大小转化文件大小的展示名称
      *
-     * @param totalSize
-     * @return
+     * @param totalSize 文件大小（字节数）
+     * @return 文件大小的字符串表示，如果文件大小为 null，则返回空字符串
      */
     public static String byteCountToDisplaySize(Long totalSize) {
         if (Objects.isNull(totalSize)) {
@@ -63,12 +66,13 @@ public class FileUtils {
     /**
      * 批量删除物理文件
      *
-     * @param realFilePathList
+     * @param realFilePathList 文件路径列表
      */
     public static void deleteFiles(List<String> realFilePathList) throws IOException {
         if (CollectionUtils.isEmpty(realFilePathList)) {
             return;
         }
+        // 遍历文件路径列表并删除每个文件
         for (String realFilePath : realFilePathList) {
             org.apache.commons.io.FileUtils.forceDelete(new File(realFilePath));
         }
@@ -107,11 +111,18 @@ public class FileUtils {
      * @param totalSize
      */
     public static void writeStream2File(InputStream inputStream, File targetFile, Long totalSize) throws IOException {
+        // 创建目标文件（如果父目录不存在，则创建父目录）
         createFile(targetFile);
+        // 使用“rw”模式打开目标文件的随机访问文件流
         RandomAccessFile randomAccessFile = new RandomAccessFile(targetFile, "rw");
+        // 获取目标文件的文件通道
         FileChannel outputChannel = randomAccessFile.getChannel();
+        // 将输入流包装成可读字节通道
         ReadableByteChannel inputChannel = Channels.newChannel(inputStream);
+        // 将输入流包装成可读字节通道
         outputChannel.transferFrom(inputChannel, 0L, totalSize);
+
+        // 关闭
         inputChannel.close();
         outputChannel.close();
         randomAccessFile.close();

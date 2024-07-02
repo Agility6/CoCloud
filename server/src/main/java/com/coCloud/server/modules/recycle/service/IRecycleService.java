@@ -2,6 +2,7 @@ package com.coCloud.server.modules.recycle.service;
 
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
 import com.coCloud.server.modules.recycle.context.QueryRecycleFileListContext;
+import com.coCloud.server.modules.recycle.context.RestoreContext;
 
 import java.util.List;
 
@@ -22,4 +23,11 @@ public interface IRecycleService {
      * @return
      */
     List<CoCloudUserFileVO> recycles(QueryRecycleFileListContext context);
+
+    /**
+     * 文件还原
+     *
+     * @param context
+     */
+    void restore(RestoreContext context);
 }
