@@ -20,15 +20,6 @@
         <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
     </resultMap>
 
-    <sql id="Base_Column_List">
-        file_id
-        ,user_id,parent_id,
-        real_file_id,filename,folder_flag,
-        file_size_desc,file_type,del_flag,
-        create_user,create_time,update_user,
-        update_time
-    </sql>
-
     <select id="selectFileList" resultType="com.coCloud.server.modules.file.vo.CoCloudUserFileVO">
         SELECT
             file_id AS fileId,
@@ -70,7 +61,7 @@
         file_type AS fileType,
         update_time AS updateTime
         FROM
-        r_pan_user_file
+        co_cloud_user_file
         WHERE
         user_id = #{param.userId}
         AND filename LIKE CONCAT(#{param.keyword}, '%')

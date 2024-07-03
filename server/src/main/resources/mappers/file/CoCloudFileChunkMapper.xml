@@ -13,9 +13,4 @@
         <result property="createUser" column="create_user" jdbcType="BIGINT"/>
         <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>    </resultMap>
 
-    <sql id="Base_Column_List">
-        id,identifier,real_path,
-        chunk_number,expiration_time,create_user,
-        create_time
-    </sql>
 </mapper>

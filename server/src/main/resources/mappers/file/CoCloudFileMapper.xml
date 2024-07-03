@@ -17,10 +17,4 @@
         <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
     </resultMap>
 
-    <sql id="Base_Column_List">
-        file_id,filename,real_path,
-        file_size,file_size_desc,file_suffix,
-        file_preview_content_type,identifier,create_user,
-        create_time
-    </sql>
 </mapper>
