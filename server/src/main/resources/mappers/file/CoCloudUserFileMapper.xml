@@ -51,7 +51,7 @@
         AND del_flag = #{param.delFlag}
     </select>
 
-    <select id="searchFile" resultType="com.coCloud.server.modules.file.vo.FileSearchResultVO">\
+    <select id="searchFile" resultType="com.coCloud.server.modules.file.vo.FileSearchResultVO">
         SELECT
         file_id AS fileId,
         parent_id AS parentId,
@@ -72,5 +72,15 @@
             </foreach>
         </if>
         AND del_flag = 0
+    </select>
+
+    <select id="countFoldersByName" resultType="int">
+        SELECT COUNT(*)
+        FROM co_cloud_user_file
+        WHERE (filename = #{param.filename} OR filename LIKE CONCAT(#{param.filename}, '（%'))
+        AND parent_id = #{param.parentId}
+        AND folder_flag = #{param.folderFlag}
+        AND user_id = #{param.userId}
+        AND del_flag = #{param.delFlag}
     </select>
 </mapper>

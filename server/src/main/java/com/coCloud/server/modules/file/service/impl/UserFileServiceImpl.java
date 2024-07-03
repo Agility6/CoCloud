@@ -29,20 +29,16 @@ import com.coCloud.storage.engine.core.context.ReadFileContext;
 import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.assertj.core.internal.NioFilesWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import sun.util.resources.bg.LocaleNames_bg;
 
 import javax.servlet.http.HttpServletResponse;
-import java.awt.*;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.net.UnknownServiceException;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -378,13 +374,13 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
 
         // 遍历父文件夹链条，生成面包屑列表
         do {
-           currentNode = prepareBreadcrumbVOMap.get(fileId);
-           if (Objects.nonNull(currentNode)) {
-               // 将当前节点添加到结果的开头
-               result.add(0, currentNode);
-               // 更新 fileId 为当前节点的父节点ID
-               fileId = currentNode.getParentId();
-           }
+            currentNode = prepareBreadcrumbVOMap.get(fileId);
+            if (Objects.nonNull(currentNode)) {
+                // 将当前节点添加到结果的开头
+                result.add(0, currentNode);
+                // 更新 fileId 为当前节点的父节点ID
+                fileId = currentNode.getParentId();
+            }
         } while (Objects.nonNull(currentNode));
         return result;
     }
@@ -520,7 +516,9 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
             return;
         }
         String newFilename = assembleNewFilename(newFilenameWithoutSuffix, count, newFilenameSuffix);
+
         entity.setFilename(newFilename);
+
     }
 
     /**
@@ -544,13 +542,13 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
      * @return
      */
     private int getDuplicateFilename(CoCloudUserFile entity, String newFilenameWithoutSuffix) {
-        QueryWrapper queryWrapper = new QueryWrapper();
-        queryWrapper.eq("parent_id", entity.getParentId());
-        queryWrapper.eq("folder_flag", entity.getFolderFlag());
-        queryWrapper.eq("user_id", entity.getUserId());
-        queryWrapper.eq("del_flag", DelFlagEnum.NO.getCode());
-        queryWrapper.likeLeft("filename", newFilenameWithoutSuffix);
-        return count(queryWrapper);
+        QueryCountFoldersContext context = new QueryCountFoldersContext();
+        context.setParentId(entity.getParentId());
+        context.setFolderFlag(entity.getFolderFlag());
+        context.setUserId(entity.getUserId());
+        context.setDelFlag(DelFlagEnum.NO.getCode());
+        context.setFilename(newFilenameWithoutSuffix);
+        return baseMapper.countFoldersByName(context);
     }
 
     /**

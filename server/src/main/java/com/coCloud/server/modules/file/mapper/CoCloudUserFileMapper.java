@@ -1,6 +1,7 @@
 package com.coCloud.server.modules.file.mapper;
 
 import com.coCloud.server.modules.file.context.FileSearchContext;
+import com.coCloud.server.modules.file.context.QueryCountFoldersContext;
 import com.coCloud.server.modules.file.context.QueryFileListContext;
 import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -32,7 +33,9 @@ public interface CoCloudUserFileMapper extends BaseMapper<CoCloudUserFile> {
      * @param context
      * @return
      */
-    List<FileSearchResultVO> searchFile(FileSearchContext context);
+    List<FileSearchResultVO> searchFile(@Param("param") FileSearchContext context);
+
+    int countFoldersByName(@Param("param") QueryCountFoldersContext context);
 }
 
 
