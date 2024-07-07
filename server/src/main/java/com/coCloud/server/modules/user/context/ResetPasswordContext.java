@@ -22,9 +22,18 @@ public class ResetPasswordContext implements Serializable {
 
     private static final long serialVersionUID = -971533778693623667L;
 
+    /**
+     * 用户名
+     */
     private String username;
 
+    /**
+     * 密码
+     */
     private String password;
 
+    /**
+     * 临时token
+     */
     private String token;
 }

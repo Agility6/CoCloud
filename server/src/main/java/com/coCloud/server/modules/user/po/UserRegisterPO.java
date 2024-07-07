@@ -34,7 +34,7 @@ public class UserRegisterPO implements Serializable {
     @Length(min = 8, max = 16, message = "请输入8-16位的密码")
     private String password;
 
-    @ApiModelProperty(value = "密码问题", required = true)
+    @ApiModelProperty(value = "密保问题", required = true)
     @NotBlank(message = "密保问题不能为空")
     @Length(max = 100, message = "密保问题不能超过100个字符")
     private String question;

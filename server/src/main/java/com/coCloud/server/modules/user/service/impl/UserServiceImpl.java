@@ -75,7 +75,7 @@ public class UserServiceImpl extends ServiceImpl<CoCloudUserMapper, CoCloudUser>
      * 需要实现的功能
      * 1. 用户的登录信息校验
      * 2. 生成一个具有时效性的accessToken
-     * 3. 将accessToken缓存取来，实现单机登录
+     * 3. 将accessToken缓存起来，实现单机登录
      *
      * @param userLoginContext
      * @return
