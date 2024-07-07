@@ -1,6 +1,7 @@
 package com.coCloud.server.modules.recycle.service;
 
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
+import com.coCloud.server.modules.recycle.context.DeleteContext;
 import com.coCloud.server.modules.recycle.context.QueryRecycleFileListContext;
 import com.coCloud.server.modules.recycle.context.RestoreContext;
 
@@ -30,4 +31,11 @@ public interface IRecycleService {
      * @param context
      */
     void restore(RestoreContext context);
+
+    /**
+     * 文件彻底删除
+     *
+     * @param context
+     */
+    void delete(DeleteContext context);
 }

@@ -386,41 +386,32 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
     }
 
     /**
-     * 搜索的后置操作
-     * <p>
-     * 1. 发布文件搜索事件
+     * 递归查询所有的子文件信息
      *
-     * @param context
-     */
-    private void afterSearch(FileSearchContext context) {
-        UserSearchEvent event = new UserSearchEvent(this, context.getKeyword(), context.getUserId());
-        applicationContext.publishEvent(event);
-    }
-
-    /**
-     * 填充文件列表的父文件名称
-     *
-     * @param result
-     */
-    private void fillParentFilename(List<FileSearchResultVO> result) {
-        if (CollectionUtils.isEmpty(result)) {
-            return;
-        }
-        List<Long> parentIdList = result.stream().map(FileSearchResultVO::getParentId).collect(Collectors.toList());
-        List<CoCloudUserFile> parentRecords = listByIds(parentIdList);
-        Map<Long, String> fileId2filenameMap = parentRecords.stream().collect(Collectors.toMap(CoCloudUserFile::getFileId, CoCloudUserFile::getFilename));
-        result.stream().forEach(vo -> vo.setParentFilename(fileId2filenameMap.get(vo.getParentId())));
-    }
-
-    /**
-     * 搜素文件列表
-     *
-     * @param context
+     * @param records
      * @return
      */
-    private List<FileSearchResultVO> doSearch(FileSearchContext context) {
-        return baseMapper.searchFile(context);
+    @Override
+    public List<CoCloudUserFile> findAllFileRecords(List<CoCloudUserFile> records) {
+        // 创建result数组，将records作为初始化
+        List<CoCloudUserFile> result = Lists.newArrayList(records);
+        // 如果为空直接返回
+        if (CollectionUtils.isEmpty(result)) {
+            return result;
+        }
+        // 查询result数组中有多少个是文件夹
+        long folderCount = result.stream().filter(record -> Objects.equals(record.getFolderFlag(), FolderFlagEnum.YES.getCode())).count();
+        // 如果没有直接返回
+        if (folderCount == 0) {
+            return result;
+        }
+        // 遍历records执行doFindAllChildRecords将result和records传入
+        // TODO filter???
+        records.stream().forEach(record -> doFindAllChildRecords(result, record));
+
+        return result;
     }
+
 
     /* =============> private <============= */
 
@@ -1122,5 +1113,88 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
         // 递归调用
         childFolderRecords.stream().forEach(childRecord -> findAllChildFolderRecords(unavailableFolderRecords, folderRecordMap, childRecord));
 
+    }
+
+
+    /**
+     * 递归查询所有的子文件列表，忽略是否删除的标识
+     *
+     * @param result
+     * @param record
+     */
+    private void doFindAllChildRecords(List<CoCloudUserFile> result, CoCloudUserFile record) {
+        // 如果record为空直接返回
+        if (Objects.isNull(record)) {
+            return;
+        }
+        // 如果record不为文件夹类型直接返回
+        if (!checkIsFolder(record)) {
+            return;
+        }
+
+        // 执行findChildRecordsIgnoreDelFlag，传入record的fileId，获取所有的子文件
+        List<CoCloudUserFile> childRecords = findChildRecordsIgnoreDelFlag(record.getFileId());
+        // 如果childRecords为空直接返回
+        if (CollectionUtils.isEmpty(childRecords)) {
+            return;
+        }
+
+        // 将childRecords添加到result中
+        result.addAll(childRecords);
+        // 递归查询childRecords的数据，过滤符合文件夹的
+        childRecords.stream()
+                .filter(childRecord -> FolderFlagEnum.YES.getCode().equals(childRecord.getFolderFlag()))
+                .forEach(childRecord -> doFindAllChildRecords(result, childRecord));
+    }
+
+    /**
+     * 查询文件夹下面的文件记录，忽略删除标识
+     *
+     * @param fileId
+     * @return
+     */
+    private List<CoCloudUserFile> findChildRecordsIgnoreDelFlag(Long fileId) {
+        // QueryWrapper查询，parentId是fileId即可
+        QueryWrapper queryWrapper = Wrappers.query();
+        queryWrapper.eq("parent_id", fileId);
+        List<CoCloudUserFile> childRecords = list(queryWrapper);
+        return childRecords;
+    }
+
+    /**
+     * 搜索的后置操作
+     * <p>
+     * 1. 发布文件搜索事件
+     *
+     * @param context
+     */
+    private void afterSearch(FileSearchContext context) {
+        UserSearchEvent event = new UserSearchEvent(this, context.getKeyword(), context.getUserId());
+        applicationContext.publishEvent(event);
+    }
+
+    /**
+     * 填充文件列表的父文件名称
+     *
+     * @param result
+     */
+    private void fillParentFilename(List<FileSearchResultVO> result) {
+        if (CollectionUtils.isEmpty(result)) {
+            return;
+        }
+        List<Long> parentIdList = result.stream().map(FileSearchResultVO::getParentId).collect(Collectors.toList());
+        List<CoCloudUserFile> parentRecords = listByIds(parentIdList);
+        Map<Long, String> fileId2filenameMap = parentRecords.stream().collect(Collectors.toMap(CoCloudUserFile::getFileId, CoCloudUserFile::getFilename));
+        result.stream().forEach(vo -> vo.setParentFilename(fileId2filenameMap.get(vo.getParentId())));
+    }
+
+    /**
+     * 搜素文件列表
+     *
+     * @param context
+     * @return
+     */
+    private List<FileSearchResultVO> doSearch(FileSearchContext context) {
+        return baseMapper.searchFile(context);
     }
 }

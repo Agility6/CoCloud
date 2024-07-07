@@ -141,4 +141,12 @@ public interface IUserFileService extends IService<CoCloudUserFile> {
      * @return
      */
     List<BreadcrumbVO> getBreadcrumbs(QueryBreadcrumbsContext context);
+
+    /**
+     * 递归查询所有的子文件信息
+     *
+     * @param records
+     * @return
+     */
+    List<CoCloudUserFile> findAllFileRecords(List<CoCloudUserFile> records);
 }
