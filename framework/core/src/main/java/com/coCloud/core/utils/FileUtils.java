@@ -145,7 +145,7 @@ public class FileUtils {
     /**
      * 生成默认的文件存储路径
      * <p>
-     * 生成规则：当前登录用户的文件目录 + rpan
+     * 生成规则：当前登录用户的文件目录 + coCloud
      *
      * @return
      */
