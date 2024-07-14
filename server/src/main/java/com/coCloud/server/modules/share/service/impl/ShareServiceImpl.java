@@ -12,7 +12,10 @@ import com.coCloud.core.utils.IdUtil;
 import com.coCloud.core.utils.JwtUtil;
 import com.coCloud.core.utils.UUIDUtil;
 import com.coCloud.server.common.config.CoCloudServerConfig;
+import com.coCloud.server.modules.file.context.QueryFileListContext;
+import com.coCloud.server.modules.file.enums.DelFlagEnum;
 import com.coCloud.server.modules.file.service.IUserFileService;
+import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
 import com.coCloud.server.modules.share.constants.ShareConstants;
 import com.coCloud.server.modules.share.context.*;
 import com.coCloud.server.modules.share.entity.CoCloudShare;
@@ -21,10 +24,11 @@ import com.coCloud.server.modules.share.enums.ShareStatusEnum;
 import com.coCloud.server.modules.share.service.IShareFileService;
 import com.coCloud.server.modules.share.service.IShareService;
 import com.coCloud.server.modules.share.mapper.CoCloudShareMapper;
-import com.coCloud.server.modules.share.vo.CoCloudShareUrlListVO;
-import com.coCloud.server.modules.share.vo.CoCloudShareUrlVO;
+import com.coCloud.server.modules.share.vo.*;
+import com.coCloud.server.modules.user.entity.CoCloudUser;
 import com.coCloud.server.modules.user.service.IUserService;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.assertj.core.util.Lists;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -116,6 +120,100 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
         doCheckShareCode(context);
         return generateShareToken(context);
     }
+
+    /**
+     * 查询分享的详情
+     * <p>
+     * 1. 校验分享的状态
+     * 2. 初始化分享实体
+     * 3. 查询分享的主体信息
+     * 4. 查询分享的文件列表
+     * 5. 查询分享者的信息
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public ShareDetailVO detail(QueryShareDetailContext context) {
+        // 校验分享状态
+        CoCloudShare record = checkShareStatus(context.getShareId());
+        context.setRecord(record);
+        initShareVO(context);
+        assembleMainShareInfo(context);
+        assembleShareFilesInfo(context);
+        assembleShareUserInfo(context);
+        return context.getVo();
+    }
+
+    /**
+     * 查询分享的简单详情
+     * <p>
+     * 1. 校验分享的状态
+     * 2. 初始化分享实体
+     * 3. 查询分享的主体信息
+     * 4. 查询分享者的信息
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public ShareSimpleDetailVO simpleDetail(QueryShareSimpleDetailContext context) {
+        CoCloudShare record = checkShareStatus(context.getShareId());
+        context.setRecord(record);
+        initShareSimpleVO(context);
+        assembleMainShareSimpleInfo(context);
+        assembleShareSimpleUserInfo(context);
+        return context.getVo();
+    }
+
+    /**
+     * 瓶装简单文件分享详情的用户信息
+     *
+     * @param context
+     */
+    private void assembleShareSimpleUserInfo(QueryShareSimpleDetailContext context) {
+        // 获取CreateUser的entity
+        CoCloudUser record = iUserService.getById(context.getRecord().getCreateUser());
+
+        // 判空
+        if (Objects.isNull(record)) {
+            throw new CoCloudBusinessException("用户信息查询失败");
+        }
+
+        // 创建shareUserInfoVO
+        ShareUserInfoVO shareUserInfoVO = new ShareUserInfoVO();
+        // set属性
+        shareUserInfoVO.setUserId(record.getUserId());
+        shareUserInfoVO.setUsername(encryptUsername(record.getUsername()));
+
+        context.getVo().setShareUserInfoVO(shareUserInfoVO);
+    }
+
+    /**
+     * 填充简单分享详情实体信息
+     *
+     * @param context
+     */
+    private void assembleMainShareSimpleInfo(QueryShareSimpleDetailContext context) {
+        // 从context中获取record
+        CoCloudShare record = context.getRecord();
+        // 从context中获取vo
+        ShareSimpleDetailVO vo = context.getVo();
+
+        vo.setShareId(record.getShareId());
+        vo.setShareName(record.getShareName());
+    }
+
+    /**
+     * 初始化简单分享详情的VO对象
+     *
+     * @param context
+     */
+    private void initShareSimpleVO(QueryShareSimpleDetailContext context) {
+        ShareSimpleDetailVO vo = new ShareSimpleDetailVO();
+        context.setVo(vo);
+    }
+
 
     /* =============> private <============= */
 
@@ -345,5 +443,109 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
             }
         }
     }
+
+    /**
+     * 查询分享者的信息
+     *
+     * @param context
+     */
+    private void assembleShareUserInfo(QueryShareDetailContext context) {
+        // 通过CreateUserId获取User的entity对象
+        CoCloudUser record = iUserService.getById(context.getRecord().getCreateUser());
+        // 判空
+        if (Objects.isNull(record)) {
+            throw new CoCloudBusinessException("用户信息查询失败");
+        }
+
+        // 创建ShareUserInfoVO对象
+        ShareUserInfoVO shareUserInfoVO = new ShareUserInfoVO();
+        // 装配属性
+        shareUserInfoVO.setUsername(encryptUsername(record.getUsername()));
+        shareUserInfoVO.setUserId(record.getUserId());
+
+        // 放入到context中
+        context.getVo().setShareUserInfoVO(shareUserInfoVO);
+    }
+
+    private String encryptUsername(String username) {
+        StringBuffer stringBuffer = new StringBuffer(username);
+        stringBuffer.replace(CoCloudConstants.TWO_INT, username.length() - CoCloudConstants.TWO_INT, CoCloudConstants.COMMON_ENCRYPT_STR);
+        return stringBuffer.toString();
+    }
+
+    /**
+     * 查询分享对应的文件列表
+     * <p>
+     * 1. 查询分享对应的文件ID
+     * 2. 根据文件ID来查询文件列表信息
+     *
+     * @param context
+     */
+    private void assembleShareFilesInfo(QueryShareDetailContext context) {
+        // 获取shareFileIdList
+        List<Long> fileIdList = getShareFileIdList(context.getShareId());
+
+        // 创建QueryFileListContext
+        QueryFileListContext queryFileListContext = new QueryFileListContext();
+        // 装配属性
+        queryFileListContext.setUserId(context.getRecord().getCreateUser());
+        queryFileListContext.setDelFlag(DelFlagEnum.NO.getCode());
+        queryFileListContext.setFileIdList(fileIdList);
+
+        // 调用UserFileService的getFileList
+        List<CoCloudUserFileVO> coCloudUserFileVOList = iUserFileService.getFileList(queryFileListContext);
+        // 装配到context中
+        context.getVo().setCoCloudUserFileVOList(coCloudUserFileVOList);
+    }
+
+    /**
+     * 查询分享对应的文件ID集合
+     *
+     * @param shareId
+     * @return
+     */
+    private List<Long> getShareFileIdList(Long shareId) {
+        if (Objects.isNull(shareId)) {
+            return Lists.newArrayList();
+        }
+
+        QueryWrapper queryWrapper = Wrappers.query();
+        queryWrapper.select("file_id");
+        queryWrapper.eq("share_id", shareId);
+        List<Long> fileIdList = iShareFileService.listObjs(queryWrapper, value -> (Long) value);
+        return fileIdList;
+    }
+
+    /**
+     * 查询分享的主体信息
+     *
+     * @param context
+     */
+    private void assembleMainShareInfo(QueryShareDetailContext context) {
+        // 获取context中的CoCloudShare
+        CoCloudShare record = context.getRecord();
+        // 获取context中的vo对象
+        ShareDetailVO vo = context.getVo();
+        // 设置属性
+        vo.setShareId(record.getShareId());
+        vo.setShareName(record.getShareName());
+        vo.setCreateTime(record.getCreateTime());
+        vo.setShareDay(record.getShareDay());
+        vo.setShareEndTime(record.getShareEndTime());
+    }
+
+    /**
+     * 初始化文件详情的VO实体
+     *
+     * @param context
+     */
+    private void initShareVO(QueryShareDetailContext context) {
+        // 创建ShareDetailVO对象
+        ShareDetailVO vo = new ShareDetailVO();
+        // 添加到context中
+        context.setVo(vo);
+
+    }
+
 
 }

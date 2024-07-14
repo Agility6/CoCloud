@@ -14,7 +14,7 @@ public interface IShareFileService extends IService<CoCloudShareFile> {
     /**
      * 保存分享的文件的对应关系
      *
-     * @param saveShareFilesContext
+     * @param context
      */
     void saveShareFiles(SaveShareFilesContext context);
 }

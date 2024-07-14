@@ -1,13 +1,12 @@
 package com.coCloud.server.modules.share.service;
 
-import com.coCloud.server.modules.share.context.CancelShareContext;
-import com.coCloud.server.modules.share.context.CheckShareCodeContext;
-import com.coCloud.server.modules.share.context.CreateShareUrlContext;
-import com.coCloud.server.modules.share.context.QueryShareListContext;
+import com.coCloud.server.modules.share.context.*;
 import com.coCloud.server.modules.share.entity.CoCloudShare;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.coCloud.server.modules.share.vo.CoCloudShareUrlListVO;
 import com.coCloud.server.modules.share.vo.CoCloudShareUrlVO;
+import com.coCloud.server.modules.share.vo.ShareDetailVO;
+import com.coCloud.server.modules.share.vo.ShareSimpleDetailVO;
 
 import java.util.List;
 
@@ -48,4 +47,20 @@ public interface IShareService extends IService<CoCloudShare> {
      * @return
      */
     String checkShareCode(CheckShareCodeContext context);
+
+    /**
+     * 查询分享的详情
+     *
+     * @param context
+     * @return
+     */
+    ShareDetailVO detail(QueryShareDetailContext context);
+
+    /**
+     * 查询分享的简单详情
+     *
+     * @param context
+     * @return
+     */
+    ShareSimpleDetailVO simpleDetail(QueryShareSimpleDetailContext context);
 }

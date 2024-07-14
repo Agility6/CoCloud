@@ -4,19 +4,19 @@ import com.coCloud.core.constants.CoCloudConstants;
 import com.coCloud.core.response.R;
 import com.coCloud.core.utils.IdUtil;
 import com.coCloud.server.common.annotation.LoginIgnore;
+import com.coCloud.server.common.annotation.NeedShareCode;
+import com.coCloud.server.common.utils.ShareIdUtil;
 import com.coCloud.server.common.utils.UserIdUtil;
-import com.coCloud.server.modules.share.context.CancelShareContext;
-import com.coCloud.server.modules.share.context.CheckShareCodeContext;
-import com.coCloud.server.modules.share.context.CreateShareUrlContext;
-import com.coCloud.server.modules.share.context.QueryShareListContext;
+import com.coCloud.server.modules.share.context.*;
 import com.coCloud.server.modules.share.converter.ShareConverter;
-import com.coCloud.server.modules.share.entity.CoCloudShare;
 import com.coCloud.server.modules.share.po.CancelSharePO;
 import com.coCloud.server.modules.share.po.CheckShareCodePO;
 import com.coCloud.server.modules.share.po.CreateShareUrlPO;
 import com.coCloud.server.modules.share.service.IShareService;
 import com.coCloud.server.modules.share.vo.CoCloudShareUrlListVO;
 import com.coCloud.server.modules.share.vo.CoCloudShareUrlVO;
+import com.coCloud.server.modules.share.vo.ShareDetailVO;
+import com.coCloud.server.modules.share.vo.ShareSimpleDetailVO;
 import com.google.common.base.Splitter;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -25,7 +25,7 @@ import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.awt.*;
+import javax.validation.constraints.NotBlank;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -115,4 +115,36 @@ public class ShareController {
         String token = iShareService.checkShareCode(context);
         return R.data(token);
     }
+
+    @ApiOperation(
+            value = "查询分享的详情",
+            notes = "该接口提供了查询分享的详情的功能",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @LoginIgnore
+    @NeedShareCode
+    @GetMapping("share")
+    public R<ShareDetailVO> detail() {
+        QueryShareDetailContext context = new QueryShareDetailContext();
+        context.setShareId(ShareIdUtil.get());
+        ShareDetailVO vo = iShareService.detail(context);
+        return R.data(vo);
+    }
+
+    @ApiOperation(
+            value = "查询分享的简单详情",
+            notes = "该接口提供了查询分享的简单详情的功能",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @LoginIgnore
+    @GetMapping("share/simple")
+    public R<ShareSimpleDetailVO> simpleDetail(@NotBlank(message = "分享的ID不能为空") @RequestParam(value = "shareId", required = false) String shareId) {
+        QueryShareSimpleDetailContext context = new QueryShareSimpleDetailContext();
+        context.setShareId(IdUtil.decrypt(shareId));
+        ShareSimpleDetailVO vo = iShareService.simpleDetail(context);
+        return R.data(vo);
+    }
+
 }
