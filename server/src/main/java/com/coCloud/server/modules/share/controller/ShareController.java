@@ -7,6 +7,7 @@ import com.coCloud.server.common.annotation.LoginIgnore;
 import com.coCloud.server.common.annotation.NeedShareCode;
 import com.coCloud.server.common.utils.ShareIdUtil;
 import com.coCloud.server.common.utils.UserIdUtil;
+import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
 import com.coCloud.server.modules.share.context.*;
 import com.coCloud.server.modules.share.converter.ShareConverter;
 import com.coCloud.server.modules.share.po.CancelSharePO;
@@ -145,6 +146,23 @@ public class ShareController {
         context.setShareId(IdUtil.decrypt(shareId));
         ShareSimpleDetailVO vo = iShareService.simpleDetail(context);
         return R.data(vo);
+    }
+
+    @ApiOperation(
+            value = "获取下一级文件列表",
+            notes = "该接口提供了获取下一级文件列表的功能",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @NeedShareCode
+    @LoginIgnore
+    @GetMapping("share/file/list")
+    public R<List<CoCloudUserFileVO>> fileList(@NotBlank(message = "文件的父ID不能为空") @RequestParam(value = "parentId", required = false) String parentId) {
+        QueryChildFileListContext context = new QueryChildFileListContext();
+        context.setShareId(ShareIdUtil.get());
+        context.setParentId(IdUtil.decrypt(parentId));
+        List<CoCloudUserFileVO> result = iShareService.fileList(context);
+        return R.data(result);
     }
 
 }

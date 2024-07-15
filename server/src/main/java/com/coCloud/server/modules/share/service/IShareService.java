@@ -1,5 +1,6 @@
 package com.coCloud.server.modules.share.service;
 
+import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
 import com.coCloud.server.modules.share.context.*;
 import com.coCloud.server.modules.share.entity.CoCloudShare;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -63,4 +64,12 @@ public interface IShareService extends IService<CoCloudShare> {
      * @return
      */
     ShareSimpleDetailVO simpleDetail(QueryShareSimpleDetailContext context);
+
+    /**
+     * 获取下一级的文件列表
+     *
+     * @param context
+     * @return
+     */
+    List<CoCloudUserFileVO> fileList(QueryChildFileListContext context);
 }

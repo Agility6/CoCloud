@@ -33,6 +33,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
@@ -164,6 +165,35 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
         assembleMainShareSimpleInfo(context);
         assembleShareSimpleUserInfo(context);
         return context.getVo();
+    }
+
+    /**
+     * 获取下一级的文件列表
+     * <p>
+     * 1. 校验分享的状态
+     * 2. 校验文件的ID是在分享的文件列表中
+     * 3. 查询对应文件的子文件列表返回
+     *
+     * @param context
+     * @return
+     */
+    @Override
+    public List<CoCloudUserFileVO> fileList(QueryChildFileListContext context) {
+        CoCloudShare record = checkShareStatus(context.getShareId());
+        context.setRecord(record);
+        List<CoCloudUserFileVO> allUserFileRecords = checkFileIdIsOnShareStatusAndGetAllShareUserFiles(context.getShareId(), Lists.newArrayList(context.getParentId()));
+        return null;
+    }
+
+    /**
+     * 校验文件是否处于分享状态，返回该分享的所有文件列表
+     *
+     * @param shareId
+     * @param fileIdList
+     * @return
+     */
+    private List<CoCloudUserFileVO> checkFileIdIsOnShareStatusAndGetAllShareUserFiles(Long shareId, List<Long> fileIdList) {
+        return null;
     }
 
     /**
