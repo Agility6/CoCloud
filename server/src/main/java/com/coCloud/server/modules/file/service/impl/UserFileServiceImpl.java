@@ -412,6 +412,45 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
         return result;
     }
 
+    /**
+     * 递归查询所有的子文件信息
+     *
+     * @param fileIdList
+     * @return
+     */
+    @Override
+    public List<CoCloudUserFile> findAllFileRecordsByFileIdList(List<Long> fileIdList) {
+        // fileIdList是否为空
+        if (CollectionUtils.isEmpty(fileIdList)) {
+            return Lists.newArrayList();
+        }
+
+        // 查询fileIdList
+        List<CoCloudUserFile> records = listByIds(fileIdList);
+
+        // 判空
+        if (CollectionUtils.isEmpty(records)) {
+            return Lists.newArrayList();
+        }
+
+        // 递归
+        return findAllFileRecords(records);
+    }
+
+    /**
+     * 实体转换
+     *
+     * @param records
+     * @return
+     */
+    @Override
+    public List<CoCloudUserFileVO> transferVOList(List<CoCloudUserFile> records) {
+        if (CollectionUtils.isEmpty(records)) {
+            return Lists.newArrayList();
+        }
+        return records.stream().map(fileConverter::coCloudUserFile2CoCloudUserFileVO).collect(Collectors.toList());
+    }
+
 
     /* =============> private <============= */
 

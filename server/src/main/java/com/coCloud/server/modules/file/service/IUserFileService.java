@@ -149,4 +149,20 @@ public interface IUserFileService extends IService<CoCloudUserFile> {
      * @return
      */
     List<CoCloudUserFile> findAllFileRecords(List<CoCloudUserFile> records);
+
+    /**
+     * 递归查询所有的子文件信息
+     *
+     * @param fileIdList
+     * @return
+     */
+    List<CoCloudUserFile> findAllFileRecordsByFileIdList(List<Long> fileIdList);
+
+    /**
+     * 实体转换
+     *
+     * @param records
+     * @return
+     */
+    List<CoCloudUserFileVO> transferVOList(List<CoCloudUserFile> records);
 }

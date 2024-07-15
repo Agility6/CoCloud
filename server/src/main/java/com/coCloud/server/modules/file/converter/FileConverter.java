@@ -73,4 +73,6 @@ public interface FileConverter {
     @Mapping(target = "id", source = "record.fileId")
     @Mapping(target = "children", expression = "java(com.google.common.collect.Lists.newArrayList())")
     FolderTreeNodeVO coCloudUserFile2FolderTreeNodeVO(CoCloudUserFile record);
+
+    CoCloudUserFileVO coCloudUserFile2CoCloudUserFileVO(CoCloudUserFile record);
 }

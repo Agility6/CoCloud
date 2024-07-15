@@ -3,6 +3,7 @@ package com.coCloud.server.modules.share.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.coCloud.core.constants.CoCloudConstants;
@@ -13,6 +14,7 @@ import com.coCloud.core.utils.JwtUtil;
 import com.coCloud.core.utils.UUIDUtil;
 import com.coCloud.server.common.config.CoCloudServerConfig;
 import com.coCloud.server.modules.file.context.QueryFileListContext;
+import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.coCloud.server.modules.file.enums.DelFlagEnum;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.file.vo.CoCloudUserFileVO;
@@ -33,10 +35,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * @author agility6
@@ -181,8 +181,15 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
     public List<CoCloudUserFileVO> fileList(QueryChildFileListContext context) {
         CoCloudShare record = checkShareStatus(context.getShareId());
         context.setRecord(record);
+        // 校验文件的是不是在分享的文件列表中，也就是文件的parentId是否都是一样的
         List<CoCloudUserFileVO> allUserFileRecords = checkFileIdIsOnShareStatusAndGetAllShareUserFiles(context.getShareId(), Lists.newArrayList(context.getParentId()));
-        return null;
+        Map<Long, List<CoCloudUserFileVO>> parentIdFileListMap = allUserFileRecords.stream().collect(Collectors.groupingBy(CoCloudUserFileVO::getParentId));
+        List<CoCloudUserFileVO> coCloudUserFileVOS = parentIdFileListMap.get(context.getParentId());
+        if (CollectionUtils.isEmpty(coCloudUserFileVOS)) {
+            return Lists.newArrayList();
+        }
+
+        return coCloudUserFileVOS;
     }
 
     /**
@@ -193,7 +200,36 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
      * @return
      */
     private List<CoCloudUserFileVO> checkFileIdIsOnShareStatusAndGetAllShareUserFiles(Long shareId, List<Long> fileIdList) {
-        return null;
+        // 通过shareId获取FileIdList
+        List<Long> shareFileIdList = getShareFileIdList(shareId);
+
+        // 判空
+        if (CollectionUtils.isEmpty(shareFileIdList)) {
+            return Lists.newArrayList();
+        }
+
+        // 递归查询所有的子文件信息
+        List<CoCloudUserFile> allFileRecords = iUserFileService.findAllFileRecordsByFileIdList(shareFileIdList);
+        // 判空
+        if (CollectionUtils.isEmpty(allFileRecords)) {
+            return Lists.newArrayList();
+        }
+
+        // 过滤不为空的和不是被删除标识的
+        allFileRecords = allFileRecords.stream()
+                .filter(Objects::nonNull)
+                .filter(record -> Objects.equals(record.getDelFlag(), DelFlagEnum.NO.getCode()))
+                .collect(Collectors.toList());
+
+        // 获取allFileRecords中的fileId
+        List<Long> allFileIdList = allFileRecords.stream().map(CoCloudUserFile::getFileId).collect(Collectors.toList());
+
+        // 筛选出来的allFileIdList是否完全包含fileIdList
+        if (allFileIdList.containsAll(fileIdList)) {
+            return iUserFileService.transferVOList(allFileRecords);
+        }
+
+        throw new CoCloudBusinessException(ResponseCode.SHARE_FILE_MISS);
     }
 
     /**
