@@ -13,6 +13,7 @@ import com.coCloud.server.modules.share.converter.ShareConverter;
 import com.coCloud.server.modules.share.po.CancelSharePO;
 import com.coCloud.server.modules.share.po.CheckShareCodePO;
 import com.coCloud.server.modules.share.po.CreateShareUrlPO;
+import com.coCloud.server.modules.share.po.ShareSavePO;
 import com.coCloud.server.modules.share.service.IShareService;
 import com.coCloud.server.modules.share.vo.CoCloudShareUrlListVO;
 import com.coCloud.server.modules.share.vo.CoCloudShareUrlVO;
@@ -26,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.constraints.NotBlank;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -163,6 +165,47 @@ public class ShareController {
         context.setParentId(IdUtil.decrypt(parentId));
         List<CoCloudUserFileVO> result = iShareService.fileList(context);
         return R.data(result);
+    }
+
+    @ApiOperation(
+            value = "保存至我的网盘",
+            notes = "该接口提供了保存至我的网盘的功能",
+            consumes = MediaType.APPLICATION_JSON_UTF8_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @NeedShareCode
+    @PostMapping("share/save")
+    public R saveFiles(@Validated @RequestBody ShareSavePO shareSavePO) {
+        ShareSaveContext context = new ShareSaveContext();
+
+        String fileIds = shareSavePO.getFileIds();
+        List<Long> fileIdList = Splitter.on(CoCloudConstants.COMMON_SEPARATOR).splitToList(fileIds).stream().map(IdUtil::decrypt).collect(Collectors.toList());
+
+        context.setFileIdList(fileIdList);
+        context.setTargetParentId(IdUtil.decrypt(shareSavePO.getTargetParentId()));
+        context.setShareId(ShareIdUtil.get());
+        context.setUserId(UserIdUtil.get());
+
+        iShareService.saveFiles(context);
+        return R.success();
+    }
+
+    @ApiOperation(
+            value = "保存至我的网盘",
+            notes = "该接口提供了保存至我的网盘的功能",
+            consumes = MediaType.APPLICATION_JSON_UTF8_VALUE,
+            produces = MediaType.APPLICATION_JSON_UTF8_VALUE
+    )
+    @GetMapping("share/file/download")
+    @NeedShareCode
+    public void download(@NotBlank(message = "文件ID不能为空") @RequestParam(value = "fileId", required = false) String fileId,
+                         HttpServletResponse response) {
+        ShareFileDownloadContext context = new ShareFileDownloadContext();
+        context.setFileId(IdUtil.decrypt(fileId));
+        context.setShareId(ShareIdUtil.get());
+        context.setUserId(UserIdUtil.get());
+        context.setResponse(response);
+        iShareService.download(context);
     }
 
 }

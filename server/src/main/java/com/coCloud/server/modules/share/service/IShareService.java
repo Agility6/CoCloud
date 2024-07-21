@@ -8,6 +8,7 @@ import com.coCloud.server.modules.share.vo.CoCloudShareUrlListVO;
 import com.coCloud.server.modules.share.vo.CoCloudShareUrlVO;
 import com.coCloud.server.modules.share.vo.ShareDetailVO;
 import com.coCloud.server.modules.share.vo.ShareSimpleDetailVO;
+import org.springframework.web.servlet.support.AbstractAnnotationConfigDispatcherServletInitializer;
 
 import java.util.List;
 
@@ -72,4 +73,18 @@ public interface IShareService extends IService<CoCloudShare> {
      * @return
      */
     List<CoCloudUserFileVO> fileList(QueryChildFileListContext context);
+
+    /**
+     * 转存至我的网盘
+     *
+     * @param context
+     */
+    void saveFiles(ShareSaveContext context);
+
+    /**
+     * 分享的文件下载
+     *
+     * @param context
+     */
+    void download(ShareFileDownloadContext context);
 }

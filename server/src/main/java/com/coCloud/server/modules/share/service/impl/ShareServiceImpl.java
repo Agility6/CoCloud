@@ -13,6 +13,8 @@ import com.coCloud.core.utils.IdUtil;
 import com.coCloud.core.utils.JwtUtil;
 import com.coCloud.core.utils.UUIDUtil;
 import com.coCloud.server.common.config.CoCloudServerConfig;
+import com.coCloud.server.modules.file.context.CopyFileContext;
+import com.coCloud.server.modules.file.context.FileDownloadContext;
 import com.coCloud.server.modules.file.context.QueryFileListContext;
 import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.coCloud.server.modules.file.enums.DelFlagEnum;
@@ -190,6 +192,82 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
         }
 
         return coCloudUserFileVOS;
+    }
+
+    /**
+     * 转至我的网盘
+     * <p>
+     * 1. 校验分享状态
+     * 2. 校验文件ID是否合法
+     * 3. 执行保存我的网盘动作
+     *
+     * @param context
+     */
+    @Override
+    public void saveFiles(ShareSaveContext context) {
+        // 校验分享状态
+        checkShareStatus(context.getShareId());
+        // 校验文件ID是否合法
+        checkFileIdIsOnShareStatus(context.getShareId(), context.getFileIdList());
+        // 保存
+        doSaveFiles(context);
+    }
+
+    /**
+     * 分享的文件下载
+     * <p>
+     * 1. 校验分享状态
+     * 2. 校验文件ID的合法性
+     * 3. 执行文件下载的动作
+     *
+     * @param context
+     */
+    @Override
+    public void download(ShareFileDownloadContext context) {
+        checkShareStatus(context.getShareId());
+        checkFileIdIsOnShareStatus(context.getShareId(), Lists.newArrayList(context.getFileId()));
+        doDownload(context);
+    }
+
+    /**
+     * 执行分享文件下载的动作
+     * 委托文件模块去做
+     *
+     * @param context
+     */
+    private void doDownload(ShareFileDownloadContext context) {
+        FileDownloadContext fileDownloadContext = new FileDownloadContext();
+        fileDownloadContext.setFileId(context.getFileId());
+        fileDownloadContext.setUserId(context.getUserId());
+        fileDownloadContext.setResponse(context.getResponse());
+        iUserFileService.downloadWithoutCheckUser(fileDownloadContext);
+    }
+
+    /**
+     * 执行保存我的网盘动作
+     * 委托文件模块做文件拷贝的操作
+     *
+     * @param context
+     */
+    private void doSaveFiles(ShareSaveContext context) {
+        // 创建copyFileContext
+        CopyFileContext copyFileContext = new CopyFileContext();
+        // 设置属性
+        copyFileContext.setUserId(context.getUserId());
+        copyFileContext.setTargetParentId(context.getTargetParentId());
+        copyFileContext.setFileIdList(context.getFileIdList());
+        // 调用UserFileService的copy方法
+        iUserFileService.copy(copyFileContext);
+    }
+
+    /**
+     * 校验文件ID是否属于某一个分享
+     *
+     * @param shareId
+     * @param fileIdList
+     */
+    private void checkFileIdIsOnShareStatus(Long shareId, List<Long> fileIdList) {
+        checkFileIdIsOnShareStatusAndGetAllShareUserFiles(shareId, fileIdList);
     }
 
     /**

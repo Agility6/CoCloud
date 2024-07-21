@@ -165,4 +165,11 @@ public interface IUserFileService extends IService<CoCloudUserFile> {
      * @return
      */
     List<CoCloudUserFileVO> transferVOList(List<CoCloudUserFile> records);
+
+    /**
+     * 文件下载 不校验用户是否是上传用户
+     *
+     * @param fileDownloadContext
+     */
+    void downloadWithoutCheckUser(FileDownloadContext fileDownloadContext);
 }

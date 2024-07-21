@@ -451,6 +451,23 @@ public class UserFileServiceImpl extends ServiceImpl<CoCloudUserFileMapper, CoCl
         return records.stream().map(fileConverter::coCloudUserFile2CoCloudUserFileVO).collect(Collectors.toList());
     }
 
+    /**
+     * 文件下载 不校验用户是否是上传用户
+     *
+     * @param context
+     */
+    @Override
+    public void downloadWithoutCheckUser(FileDownloadContext context) {
+        CoCloudUserFile record = getById(context.getFileId());
+        if (Objects.isNull(record)) {
+            throw new CoCloudBusinessException("当前文件记录不存在");
+        }
+        if (checkIsFolder(record)) {
+            throw new CoCloudBusinessException("文件夹暂不支持下载");
+        }
+        doDownload(record, context.getResponse());
+    }
+
 
     /* =============> private <============= */
 
