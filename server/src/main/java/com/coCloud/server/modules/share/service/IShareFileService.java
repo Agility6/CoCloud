@@ -4,6 +4,8 @@ import com.coCloud.server.modules.share.context.SaveShareFilesContext;
 import com.coCloud.server.modules.share.entity.CoCloudShareFile;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+
 /**
  * @author agility6
  * @description 针对表【co_cloud_share_file(用户分享文件表)】的数据库操作Service
@@ -17,4 +19,6 @@ public interface IShareFileService extends IService<CoCloudShareFile> {
      * @param context
      */
     void saveShareFiles(SaveShareFilesContext context);
+
+    void refreshShareStatus(List<Long> allAvailableFileIdList);
 }
