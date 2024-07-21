@@ -56,7 +56,6 @@ public class FileController {
             produces = MediaType.APPLICATION_JSON_UTF8_VALUE
     )
     @GetMapping("files")
-
     public R<List<CoCloudUserFileVO>> list(@NotBlank(message = "父文件夹ID不能为空") @RequestParam(value = "parentId", required = false) String parentId,
                                            @RequestParam(value = "fileType", required = false, defaultValue = FileConstants.ALL_FILE_TYPE) String fileTypes) {
         // 解密Id
