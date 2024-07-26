@@ -19,6 +19,4 @@ public interface IShareFileService extends IService<CoCloudShareFile> {
      * @param context
      */
     void saveShareFiles(SaveShareFilesContext context);
-
-    void refreshShareStatus(List<Long> allAvailableFileIdList);
 }

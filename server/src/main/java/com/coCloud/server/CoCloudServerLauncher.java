@@ -5,6 +5,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.servlet.ServletComponentScan;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @ServletComponentScan(basePackages = CoCloudConstants.BASE_COMPONENT_SCAN_PATH)
 @EnableTransactionManagement // 支持事务
 @MapperScan(basePackages = CoCloudConstants.BASE_COMPONENT_SCAN_PATH + ".server.modules.**.mapper")
+@EnableAsync
 public class CoCloudServerLauncher {
     public static void main(String[] args) {
         SpringApplication.run(CoCloudServerLauncher.class);

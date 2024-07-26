@@ -3,6 +3,7 @@ package com.coCloud.server.modules.share.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -13,6 +14,8 @@ import com.coCloud.core.utils.IdUtil;
 import com.coCloud.core.utils.JwtUtil;
 import com.coCloud.core.utils.UUIDUtil;
 import com.coCloud.server.common.config.CoCloudServerConfig;
+import com.coCloud.server.common.event.log.ErrorLogEvent;
+import com.coCloud.server.modules.file.constants.FileConstants;
 import com.coCloud.server.modules.file.context.CopyFileContext;
 import com.coCloud.server.modules.file.context.FileDownloadContext;
 import com.coCloud.server.modules.file.context.QueryFileListContext;
@@ -33,9 +36,13 @@ import com.coCloud.server.modules.user.entity.CoCloudUser;
 import com.coCloud.server.modules.user.service.IUserService;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.util.Lists;
+import org.assertj.core.util.Sets;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.xmlunit.diff.Diff;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -46,7 +53,7 @@ import java.util.stream.Collectors;
  * @createDate 2024-05-10 19:23:23
  */
 @Service
-public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudShare> implements IShareService {
+public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudShare> implements IShareService, ApplicationContextAware {
 
     @Autowired
     private CoCloudServerConfig config;
@@ -59,6 +66,12 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
 
     @Autowired
     private IUserService iUserService;
+
+    private ApplicationContext applicationContext;
+
+    public void setApplicationContext(ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
+    }
 
     /**
      * 创建分享链接
@@ -227,6 +240,120 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
         checkShareStatus(context.getShareId());
         checkFileIdIsOnShareStatus(context.getShareId(), Lists.newArrayList(context.getFileId()));
         doDownload(context);
+    }
+
+    /**
+     * 刷新受到影响的对应的分享的状态
+     * <p>
+     * 1. 查询所有受影响的分享的ID集合
+     * 2. 去判断每一个分享对应的文件以及所有的父文件信息均为正常，该中情况下，把分享的状态变为正常
+     * 3. 如果有分享的文件或者是父文件信息被删除，变更该分享的状态为有文件被删除
+     *
+     * @param allAvailableFileIdList
+     */
+    @Override
+    public void refreshShareStatus(List<Long> allAvailableFileIdList) {
+        List<Long> shareIdList = getShareIdListByFileIdList(allAvailableFileIdList);
+        if (CollectionUtils.isEmpty(shareIdList)) {
+            return;
+        }
+        Set<Long> shareIdSet = Sets.newHashSet(shareIdList);
+        shareIdSet.stream().forEach(this::refreshOneShareStatus);
+    }
+
+    /**
+     * 刷新一个分享的分享状态
+     * <p>
+     * 1. 查询对应的分享信息，判断有效
+     * 2. 去判断该分享对应和的文件以及所有的父文件信息均为正常，该种情况，把分享的状态变为正常
+     * 3. 如果有分享的文件或者父文件信息被删除，变更该分享的状态为有文件被删除
+     *
+     * @param shareId
+     */
+    private void refreshOneShareStatus(Long shareId) {
+        CoCloudShare record = getById(shareId);
+        if (Objects.isNull(record)) {
+            return;
+        }
+
+        ShareStatusEnum shareStatus = ShareStatusEnum.NORMAL;
+        if (!checkShareFileAvailable(shareId)) {
+            shareStatus = ShareStatusEnum.FILE_DELETED;
+        }
+
+        if (Objects.equals(record.getShareStatus(), shareStatus.getCode())) {
+            return;
+        }
+
+        doChangeShareStatus(shareId, shareStatus);
+    }
+
+    /**
+     * 执行刷新文件分享状态的动作
+     *
+     * @param shareId
+     * @param shareStatus
+     */
+    private void doChangeShareStatus(Long shareId, ShareStatusEnum shareStatus) {
+        UpdateWrapper updateWrapper = Wrappers.update();
+        updateWrapper.eq("share_id", shareId);
+        updateWrapper.set("share_status", shareStatus.getCode());
+        if (!update(updateWrapper)) {
+            applicationContext.publishEvent(new ErrorLogEvent(this, "更新分享状态失败，请手动更改状态，分享ID为：" + shareId + ", 分享" +
+                    "状态改为：" + shareStatus.getCode(), CoCloudConstants.ZERO_LONG));
+        }
+    }
+
+    /**
+     * 检查该分享所有的文件以及所有的父文件均为正常状态
+     *
+     * @param shareId
+     * @return
+     */
+    private boolean checkShareFileAvailable(Long shareId) {
+        List<Long> shareFileIdList = getShareFileIdList(shareId);
+        for (Long fileId : shareFileIdList) {
+            if (!checkUpFileAvailable(fileId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 检查该文件以及所有的文件夹信息均为正常
+     *
+     * @param fileId
+     * @return
+     */
+    private boolean checkUpFileAvailable(Long fileId) {
+        CoCloudUserFile record = iUserFileService.getById(fileId);
+        if (Objects.isNull(record)) {
+            return false;
+        }
+        if (Objects.equals(record.getDelFlag(), DelFlagEnum.YES.getCode())) {
+            return false;
+        }
+        if (Objects.equals(record.getParentId(), FileConstants.TOP_PARENT_ID)) {
+            return true;
+        }
+        // 向上递归检查
+        return checkUpFileAvailable(record.getParentId());
+
+    }
+
+    /**
+     * 通过文件ID查询对应的分享ID集合
+     *
+     * @param allAvailableFileIdList
+     * @return
+     */
+    private List<Long> getShareIdListByFileIdList(List<Long> allAvailableFileIdList) {
+        QueryWrapper queryWrapper = Wrappers.query();
+        queryWrapper.select("share_id");
+        queryWrapper.in("file_id", allAvailableFileIdList);
+        List<Long> shareIdList = iShareFileService.listObjs(queryWrapper, value -> (Long) value);
+        return shareIdList;
     }
 
     /**

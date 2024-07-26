@@ -66,7 +66,7 @@ public class FilePhysicalDeleteEventListener implements ApplicationContextAware 
      * @param event
      */
     @EventListener(classes = FilePhysicalDeleteEvent.class)
-    @Async(value = "eventListenerTaskExecutor") // TODO eventListenerTaskExecutor
+    @Async(value = "eventListenerTaskExecutor")
     public void physicalDeleteFile(FilePhysicalDeleteEvent event) {
         // 从event中获取所有要删除的文件信息
         List<CoCloudUserFile> allRecords = event.getAllRecords();

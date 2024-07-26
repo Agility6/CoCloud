@@ -6,9 +6,11 @@ import com.coCloud.server.modules.file.entity.CoCloudUserFile;
 import com.coCloud.server.modules.file.enums.DelFlagEnum;
 import com.coCloud.server.modules.file.service.IUserFileService;
 import com.coCloud.server.modules.share.service.IShareFileService;
+import com.coCloud.server.modules.share.service.IShareService;
 import org.apache.commons.collections.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -30,36 +32,54 @@ public class ShareStatusChangeListener {
     private IUserFileService iUserFileService;
 
     @Autowired
-    private IShareFileService iShareFileService;
+    private IShareService iShareService;
 
 
     /**
      * 监听文件被删除后，刷新所有受影响的分享的状态
+     *
      * @param event
      */
+    @Async(value = "eventListenerTaskExecutor")
     @EventListener(DeleteFileEvent.class)
     public void changeShare2FileDeleted(DeleteFileEvent event) {
+        // 删除的文件列表
         List<Long> fileIdList = event.getFileIdList();
         if (CollectionUtils.isEmpty(fileIdList)) {
             return;
         }
 
+        // 查询文件的所有子文件信息（查询的结果也包括被删除标识的文件信息）
         List<CoCloudUserFile> records = iUserFileService.findAllFileRecordsByFileIdList(fileIdList);
+        //  过滤被删除的
         List<Long> allAvailableFileIdList = records.stream()
                 .filter(record -> Objects.equals(DelFlagEnum.NO.getCode(), record.getDelFlag()))
                 .map(CoCloudUserFile::getFileId)
                 .collect(Collectors.toList());
 
-        // fileIdList需要重新添加到allAvailableFileIdList中
+        // fileIdList（被监听删除的文件列表）需要重新添加到allAvailableFileIdList中
         allAvailableFileIdList.addAll(fileIdList);
-        iShareFileService.refreshShareStatus(allAvailableFileIdList);
-
-
+        iShareService.refreshShareStatus(allAvailableFileIdList);
     }
 
+    /**
+     * 监听文件被还原后，刷新所有受影响的分享的状态
+     *
+     * @param event
+     */
+    @Async(value = "eventListenerTaskExecutor")
     @EventListener(FileRestoreEvent.class)
     public void changeShare2Normal(FileRestoreEvent event) {
-
+        List<Long> fileIdList = event.getFileIdList();
+        if (CollectionUtils.isEmpty(fileIdList)) {
+            return;
+        }
+        List<CoCloudUserFile> allRecords = iUserFileService.findAllFileRecordsByFileIdList(fileIdList);
+        List<Long> allAvailableFileIdList = allRecords.stream()
+                .filter(record -> Objects.equals(record.getDelFlag(), DelFlagEnum.NO.getCode()))
+                .map(CoCloudUserFile::getFileId)
+                .collect(Collectors.toList());
+        iShareService.refreshShareStatus(allAvailableFileIdList);
     }
 
 }

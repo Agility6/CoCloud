@@ -34,6 +34,7 @@ public class UserSearchEventListener {
      *
      * @param event
      */
+    @Async(value = "eventListenerTaskExecutor")
     @EventListener(classes = UserSearchEvent.class)
     public void saveSearchHistory(UserSearchEvent event) {
         CoCloudUserSearchHistory record = new CoCloudUserSearchHistory();
