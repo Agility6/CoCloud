@@ -78,6 +78,10 @@ public class FilePhysicalDeleteEventListener implements ApplicationContextAware 
         // 执行findAllUnusedRealFileIdList返回没有被引用的真实文件ID集合
         List<Long> realFileIdList = findAllUnusedRealFileIdList(allRecords);
 
+        if (CollectionUtils.isEmpty(realFileIdList)) {
+            return;
+        }
+
         // 通过realFileIdList查询出CoCloudFile的Records
         List<CoCloudFile> realFileRecords = iFileService.listByIds(realFileIdList);
         // 判空realFileRecords

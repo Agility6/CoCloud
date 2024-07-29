@@ -4,7 +4,6 @@ import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
-import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.coCloud.core.constants.CoCloudConstants;
@@ -13,6 +12,7 @@ import com.coCloud.core.response.ResponseCode;
 import com.coCloud.core.utils.IdUtil;
 import com.coCloud.core.utils.JwtUtil;
 import com.coCloud.core.utils.UUIDUtil;
+import com.coCloud.server.common.cache.ManualCacheService;
 import com.coCloud.server.common.config.CoCloudServerConfig;
 import com.coCloud.server.common.event.log.ErrorLogEvent;
 import com.coCloud.server.modules.file.constants.FileConstants;
@@ -34,16 +34,19 @@ import com.coCloud.server.modules.share.mapper.CoCloudShareMapper;
 import com.coCloud.server.modules.share.vo.*;
 import com.coCloud.server.modules.user.entity.CoCloudUser;
 import com.coCloud.server.modules.user.service.IUserService;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.util.Lists;
 import org.assertj.core.util.Sets;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.xmlunit.diff.Diff;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -72,6 +75,10 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
     public void setApplicationContext(ApplicationContext applicationContext) {
         this.applicationContext = applicationContext;
     }
+
+    @Autowired
+    @Qualifier(value = "shareManualCacheService")
+    private ManualCacheService<CoCloudShare> cacheService;
 
     /**
      * 创建分享链接
@@ -261,230 +268,45 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
         shareIdSet.stream().forEach(this::refreshOneShareStatus);
     }
 
-    /**
-     * 刷新一个分享的分享状态
-     * <p>
-     * 1. 查询对应的分享信息，判断有效
-     * 2. 去判断该分享对应和的文件以及所有的父文件信息均为正常，该种情况，把分享的状态变为正常
-     * 3. 如果有分享的文件或者父文件信息被删除，变更该分享的状态为有文件被删除
-     *
-     * @param shareId
-     */
-    private void refreshOneShareStatus(Long shareId) {
-        CoCloudShare record = getById(shareId);
-        if (Objects.isNull(record)) {
-            return;
-        }
+    // 重写IService的方法，引入缓存
 
-        ShareStatusEnum shareStatus = ShareStatusEnum.NORMAL;
-        if (!checkShareFileAvailable(shareId)) {
-            shareStatus = ShareStatusEnum.FILE_DELETED;
-        }
-
-        if (Objects.equals(record.getShareStatus(), shareStatus.getCode())) {
-            return;
-        }
-
-        doChangeShareStatus(shareId, shareStatus);
+    public ShareServiceImpl() {
+        super();
     }
 
-    /**
-     * 执行刷新文件分享状态的动作
-     *
-     * @param shareId
-     * @param shareStatus
-     */
-    private void doChangeShareStatus(Long shareId, ShareStatusEnum shareStatus) {
-        UpdateWrapper updateWrapper = Wrappers.update();
-        updateWrapper.eq("share_id", shareId);
-        updateWrapper.set("share_status", shareStatus.getCode());
-        if (!update(updateWrapper)) {
-            applicationContext.publishEvent(new ErrorLogEvent(this, "更新分享状态失败，请手动更改状态，分享ID为：" + shareId + ", 分享" +
-                    "状态改为：" + shareStatus.getCode(), CoCloudConstants.ZERO_LONG));
-        }
+    @Override
+    public boolean removeById(Serializable id) {
+        return cacheService.removeById(id);
     }
 
-    /**
-     * 检查该分享所有的文件以及所有的父文件均为正常状态
-     *
-     * @param shareId
-     * @return
-     */
-    private boolean checkShareFileAvailable(Long shareId) {
-        List<Long> shareFileIdList = getShareFileIdList(shareId);
-        for (Long fileId : shareFileIdList) {
-            if (!checkUpFileAvailable(fileId)) {
-                return false;
-            }
-        }
-        return true;
+    @Override
+    public boolean removeByIds(Collection<? extends Serializable> idList) {
+        return cacheService.removeByIds(idList);
     }
 
-    /**
-     * 检查该文件以及所有的文件夹信息均为正常
-     *
-     * @param fileId
-     * @return
-     */
-    private boolean checkUpFileAvailable(Long fileId) {
-        CoCloudUserFile record = iUserFileService.getById(fileId);
-        if (Objects.isNull(record)) {
-            return false;
-        }
-        if (Objects.equals(record.getDelFlag(), DelFlagEnum.YES.getCode())) {
-            return false;
-        }
-        if (Objects.equals(record.getParentId(), FileConstants.TOP_PARENT_ID)) {
+    @Override
+    public boolean updateById(CoCloudShare entity) {
+        return cacheService.updateById(entity.getShareId(), entity);
+    }
+
+    @Override
+    public boolean updateBatchById(Collection<CoCloudShare> entityList) {
+        if (CollectionUtils.isEmpty(entityList)) {
             return true;
         }
-        // 向上递归检查
-        return checkUpFileAvailable(record.getParentId());
-
+        Map<Long, CoCloudShare> entityMap = entityList.stream().collect(Collectors.toMap(CoCloudShare::getShareId, e -> e));
+        return cacheService.updateByIds(entityMap);
     }
 
-    /**
-     * 通过文件ID查询对应的分享ID集合
-     *
-     * @param allAvailableFileIdList
-     * @return
-     */
-    private List<Long> getShareIdListByFileIdList(List<Long> allAvailableFileIdList) {
-        QueryWrapper queryWrapper = Wrappers.query();
-        queryWrapper.select("share_id");
-        queryWrapper.in("file_id", allAvailableFileIdList);
-        List<Long> shareIdList = iShareFileService.listObjs(queryWrapper, value -> (Long) value);
-        return shareIdList;
+    @Override
+    public CoCloudShare getById(Serializable id) {
+        return cacheService.getById(id);
     }
 
-    /**
-     * 执行分享文件下载的动作
-     * 委托文件模块去做
-     *
-     * @param context
-     */
-    private void doDownload(ShareFileDownloadContext context) {
-        FileDownloadContext fileDownloadContext = new FileDownloadContext();
-        fileDownloadContext.setFileId(context.getFileId());
-        fileDownloadContext.setUserId(context.getUserId());
-        fileDownloadContext.setResponse(context.getResponse());
-        iUserFileService.downloadWithoutCheckUser(fileDownloadContext);
+    @Override
+    public List<CoCloudShare> listByIds(Collection<? extends Serializable> idList) {
+        return cacheService.getByIds(idList);
     }
-
-    /**
-     * 执行保存我的网盘动作
-     * 委托文件模块做文件拷贝的操作
-     *
-     * @param context
-     */
-    private void doSaveFiles(ShareSaveContext context) {
-        // 创建copyFileContext
-        CopyFileContext copyFileContext = new CopyFileContext();
-        // 设置属性
-        copyFileContext.setUserId(context.getUserId());
-        copyFileContext.setTargetParentId(context.getTargetParentId());
-        copyFileContext.setFileIdList(context.getFileIdList());
-        // 调用UserFileService的copy方法
-        iUserFileService.copy(copyFileContext);
-    }
-
-    /**
-     * 校验文件ID是否属于某一个分享
-     *
-     * @param shareId
-     * @param fileIdList
-     */
-    private void checkFileIdIsOnShareStatus(Long shareId, List<Long> fileIdList) {
-        checkFileIdIsOnShareStatusAndGetAllShareUserFiles(shareId, fileIdList);
-    }
-
-    /**
-     * 校验文件是否处于分享状态，返回该分享的所有文件列表
-     *
-     * @param shareId
-     * @param fileIdList
-     * @return
-     */
-    private List<CoCloudUserFileVO> checkFileIdIsOnShareStatusAndGetAllShareUserFiles(Long shareId, List<Long> fileIdList) {
-        // 通过shareId获取FileIdList
-        List<Long> shareFileIdList = getShareFileIdList(shareId);
-
-        // 判空
-        if (CollectionUtils.isEmpty(shareFileIdList)) {
-            return Lists.newArrayList();
-        }
-
-        // 递归查询所有的子文件信息
-        List<CoCloudUserFile> allFileRecords = iUserFileService.findAllFileRecordsByFileIdList(shareFileIdList);
-        // 判空
-        if (CollectionUtils.isEmpty(allFileRecords)) {
-            return Lists.newArrayList();
-        }
-
-        // 过滤不为空的和不是被删除标识的
-        allFileRecords = allFileRecords.stream()
-                .filter(Objects::nonNull)
-                .filter(record -> Objects.equals(record.getDelFlag(), DelFlagEnum.NO.getCode()))
-                .collect(Collectors.toList());
-
-        // 获取allFileRecords中的fileId
-        List<Long> allFileIdList = allFileRecords.stream().map(CoCloudUserFile::getFileId).collect(Collectors.toList());
-
-        // 筛选出来的allFileIdList是否完全包含fileIdList
-        if (allFileIdList.containsAll(fileIdList)) {
-            return iUserFileService.transferVOList(allFileRecords);
-        }
-
-        throw new CoCloudBusinessException(ResponseCode.SHARE_FILE_MISS);
-    }
-
-    /**
-     * 瓶装简单文件分享详情的用户信息
-     *
-     * @param context
-     */
-    private void assembleShareSimpleUserInfo(QueryShareSimpleDetailContext context) {
-        // 获取CreateUser的entity
-        CoCloudUser record = iUserService.getById(context.getRecord().getCreateUser());
-
-        // 判空
-        if (Objects.isNull(record)) {
-            throw new CoCloudBusinessException("用户信息查询失败");
-        }
-
-        // 创建shareUserInfoVO
-        ShareUserInfoVO shareUserInfoVO = new ShareUserInfoVO();
-        // set属性
-        shareUserInfoVO.setUserId(record.getUserId());
-        shareUserInfoVO.setUsername(encryptUsername(record.getUsername()));
-
-        context.getVo().setShareUserInfoVO(shareUserInfoVO);
-    }
-
-    /**
-     * 填充简单分享详情实体信息
-     *
-     * @param context
-     */
-    private void assembleMainShareSimpleInfo(QueryShareSimpleDetailContext context) {
-        // 从context中获取record
-        CoCloudShare record = context.getRecord();
-        // 从context中获取vo
-        ShareSimpleDetailVO vo = context.getVo();
-
-        vo.setShareId(record.getShareId());
-        vo.setShareName(record.getShareName());
-    }
-
-    /**
-     * 初始化简单分享详情的VO对象
-     *
-     * @param context
-     */
-    private void initShareSimpleVO(QueryShareSimpleDetailContext context) {
-        ShareSimpleDetailVO vo = new ShareSimpleDetailVO();
-        context.setVo(vo);
-    }
-
 
     /* =============> private <============= */
 
@@ -818,5 +640,221 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
 
     }
 
+    /**
+     * 刷新一个分享的分享状态
+     * <p>
+     * 1. 查询对应的分享信息，判断有效
+     * 2. 去判断该分享对应和的文件以及所有的父文件信息均为正常，该种情况，把分享的状态变为正常
+     * 3. 如果有分享的文件或者父文件信息被删除，变更该分享的状态为有文件被删除
+     *
+     * @param shareId
+     */
+    private void refreshOneShareStatus(Long shareId) {
+        CoCloudShare record = getById(shareId);
+        if (Objects.isNull(record)) {
+            return;
+        }
 
+        ShareStatusEnum shareStatus = ShareStatusEnum.NORMAL;
+        if (!checkShareFileAvailable(shareId)) {
+            shareStatus = ShareStatusEnum.FILE_DELETED;
+        }
+
+        if (Objects.equals(record.getShareStatus(), shareStatus.getCode())) {
+            return;
+        }
+
+        doChangeShareStatus(record, shareStatus);
+    }
+
+    /**
+     * 执行刷新文件分享状态的动作
+     *
+     * @param record
+     * @param shareStatus
+     */
+    private void doChangeShareStatus(CoCloudShare record, ShareStatusEnum shareStatus) {
+        record.setShareStatus(shareStatus.getCode());
+        if (!updateById(record)) {
+            applicationContext.publishEvent(new ErrorLogEvent(this, "更新分享状态失败，请手动更改状态，分享ID为：" + record.getShareId() + ", 分享" + "状态改为：" + shareStatus.getCode(), CoCloudConstants.ZERO_LONG));
+        }
+    }
+
+    /**
+     * 检查该分享所有的文件以及所有的父文件均为正常状态
+     *
+     * @param shareId
+     * @return
+     */
+    private boolean checkShareFileAvailable(Long shareId) {
+        List<Long> shareFileIdList = getShareFileIdList(shareId);
+        for (Long fileId : shareFileIdList) {
+            if (!checkUpFileAvailable(fileId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 检查该文件以及所有的文件夹信息均为正常
+     *
+     * @param fileId
+     * @return
+     */
+    private boolean checkUpFileAvailable(Long fileId) {
+        CoCloudUserFile record = iUserFileService.getById(fileId);
+        if (Objects.isNull(record)) {
+            return false;
+        }
+        if (Objects.equals(record.getDelFlag(), DelFlagEnum.YES.getCode())) {
+            return false;
+        }
+        if (Objects.equals(record.getParentId(), FileConstants.TOP_PARENT_ID)) {
+            return true;
+        }
+        // 向上递归检查
+        return checkUpFileAvailable(record.getParentId());
+
+    }
+
+    /**
+     * 通过文件ID查询对应的分享ID集合
+     *
+     * @param allAvailableFileIdList
+     * @return
+     */
+    private List<Long> getShareIdListByFileIdList(List<Long> allAvailableFileIdList) {
+        QueryWrapper queryWrapper = Wrappers.query();
+        queryWrapper.select("share_id");
+        queryWrapper.in("file_id", allAvailableFileIdList);
+        List<Long> shareIdList = iShareFileService.listObjs(queryWrapper, value -> (Long) value);
+        return shareIdList;
+    }
+
+    /**
+     * 执行分享文件下载的动作
+     * 委托文件模块去做
+     *
+     * @param context
+     */
+    private void doDownload(ShareFileDownloadContext context) {
+        FileDownloadContext fileDownloadContext = new FileDownloadContext();
+        fileDownloadContext.setFileId(context.getFileId());
+        fileDownloadContext.setUserId(context.getUserId());
+        fileDownloadContext.setResponse(context.getResponse());
+        iUserFileService.downloadWithoutCheckUser(fileDownloadContext);
+    }
+
+    /**
+     * 执行保存我的网盘动作
+     * 委托文件模块做文件拷贝的操作
+     *
+     * @param context
+     */
+    private void doSaveFiles(ShareSaveContext context) {
+        // 创建copyFileContext
+        CopyFileContext copyFileContext = new CopyFileContext();
+        // 设置属性
+        copyFileContext.setUserId(context.getUserId());
+        copyFileContext.setTargetParentId(context.getTargetParentId());
+        copyFileContext.setFileIdList(context.getFileIdList());
+        // 调用UserFileService的copy方法
+        iUserFileService.copy(copyFileContext);
+    }
+
+    /**
+     * 校验文件ID是否属于某一个分享
+     *
+     * @param shareId
+     * @param fileIdList
+     */
+    private void checkFileIdIsOnShareStatus(Long shareId, List<Long> fileIdList) {
+        checkFileIdIsOnShareStatusAndGetAllShareUserFiles(shareId, fileIdList);
+    }
+
+    /**
+     * 校验文件是否处于分享状态，返回该分享的所有文件列表
+     *
+     * @param shareId
+     * @param fileIdList
+     * @return
+     */
+    private List<CoCloudUserFileVO> checkFileIdIsOnShareStatusAndGetAllShareUserFiles(Long shareId, List<Long> fileIdList) {
+        // 通过shareId获取FileIdList
+        List<Long> shareFileIdList = getShareFileIdList(shareId);
+
+        // 判空
+        if (CollectionUtils.isEmpty(shareFileIdList)) {
+            return Lists.newArrayList();
+        }
+
+        // 递归查询所有的子文件信息
+        List<CoCloudUserFile> allFileRecords = iUserFileService.findAllFileRecordsByFileIdList(shareFileIdList);
+        // 判空
+        if (CollectionUtils.isEmpty(allFileRecords)) {
+            return Lists.newArrayList();
+        }
+
+        // 过滤不为空的和不是被删除标识的
+        allFileRecords = allFileRecords.stream().filter(Objects::nonNull).filter(record -> Objects.equals(record.getDelFlag(), DelFlagEnum.NO.getCode())).collect(Collectors.toList());
+
+        // 获取allFileRecords中的fileId
+        List<Long> allFileIdList = allFileRecords.stream().map(CoCloudUserFile::getFileId).collect(Collectors.toList());
+
+        // 筛选出来的allFileIdList是否完全包含fileIdList
+        if (allFileIdList.containsAll(fileIdList)) {
+            return iUserFileService.transferVOList(allFileRecords);
+        }
+
+        throw new CoCloudBusinessException(ResponseCode.SHARE_FILE_MISS);
+    }
+
+    /**
+     * 瓶装简单文件分享详情的用户信息
+     *
+     * @param context
+     */
+    private void assembleShareSimpleUserInfo(QueryShareSimpleDetailContext context) {
+        // 获取CreateUser的entity
+        CoCloudUser record = iUserService.getById(context.getRecord().getCreateUser());
+
+        // 判空
+        if (Objects.isNull(record)) {
+            throw new CoCloudBusinessException("用户信息查询失败");
+        }
+
+        // 创建shareUserInfoVO
+        ShareUserInfoVO shareUserInfoVO = new ShareUserInfoVO();
+        // set属性
+        shareUserInfoVO.setUserId(record.getUserId());
+        shareUserInfoVO.setUsername(encryptUsername(record.getUsername()));
+
+        context.getVo().setShareUserInfoVO(shareUserInfoVO);
+    }
+
+    /**
+     * 填充简单分享详情实体信息
+     *
+     * @param context
+     */
+    private void assembleMainShareSimpleInfo(QueryShareSimpleDetailContext context) {
+        // 从context中获取record
+        CoCloudShare record = context.getRecord();
+        // 从context中获取vo
+        ShareSimpleDetailVO vo = context.getVo();
+
+        vo.setShareId(record.getShareId());
+        vo.setShareName(record.getShareName());
+    }
+
+    /**
+     * 初始化简单分享详情的VO对象
+     *
+     * @param context
+     */
+    private void initShareSimpleVO(QueryShareSimpleDetailContext context) {
+        ShareSimpleDetailVO vo = new ShareSimpleDetailVO();
+        context.setVo(vo);
+    }
 }

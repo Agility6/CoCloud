@@ -8,6 +8,7 @@ import com.coCloud.core.response.ResponseCode;
 import com.coCloud.core.utils.IdUtil;
 import com.coCloud.core.utils.JwtUtil;
 import com.coCloud.core.utils.PasswordUtil;
+import com.coCloud.server.common.cache.AnnotationCacheService;
 import com.coCloud.server.modules.file.constants.FileConstants;
 import com.coCloud.server.modules.file.context.CreateFolderContext;
 import com.coCloud.server.modules.file.entity.CoCloudUserFile;
@@ -21,12 +22,16 @@ import com.coCloud.server.modules.user.mapper.CoCloudUserMapper;
 import com.coCloud.server.modules.user.vo.UserInfoVO;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
+import java.io.Serializable;
+import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -45,6 +50,10 @@ public class UserServiceImpl extends ServiceImpl<CoCloudUserMapper, CoCloudUser>
 
     @Autowired
     private CacheManager cacheManager;
+
+    @Autowired
+    @Qualifier(value = "userAnnotationCacheService")
+    private AnnotationCacheService<CoCloudUser> cacheService;
 
     /**
      * 用户注册业务实现
@@ -215,6 +224,75 @@ public class UserServiceImpl extends ServiceImpl<CoCloudUserMapper, CoCloudUser>
         // 将User的entity和UserFile转化为VO
         return userConverter.assembleUserInfoVO(entity, coCloudUserFile);
     }
+
+    // 重写IService的方法，引入缓存
+
+    /**
+     * 根据ID删除
+     *
+     * @param id
+     * @return
+     */
+    @Override
+    public boolean removeById(Serializable id) {
+        return cacheService.removeById(id);
+    }
+
+    /**
+     * 删除（根据ID 批量删除）
+     *
+     * @param idList
+     * @return
+     */
+    @Override
+    public boolean removeByIds(Collection<? extends Serializable> idList) {
+        throw new CoCloudBusinessException("请更换手动缓存");
+    }
+
+    /**
+     * 根据ID 选择修改
+     *
+     * @param entity
+     * @return
+     */
+    @Override
+    public boolean updateById(CoCloudUser entity) {
+        return cacheService.updateById(entity.getUserId(), entity);
+    }
+
+    /**
+     * 根据ID 批量更新
+     *
+     * @param entityList
+     * @return
+     */
+    @Override
+    public boolean updateBatchById(Collection<CoCloudUser> entityList) {
+        throw new CoCloudBusinessException("请更换手动缓存");
+    }
+
+    /**
+     * 根据ID查询
+     *
+     * @param id
+     * @return
+     */
+    @Override
+    public CoCloudUser getById(Serializable id) {
+        return cacheService.getById(id);
+    }
+
+    /**
+     * 查询（根据ID 批量查询）
+     *
+     * @param idList
+     * @return
+     */
+    @Override
+    public List<CoCloudUser> listByIds(Collection<? extends Serializable> idList) {
+        throw new CoCloudBusinessException("请更换手动缓存");
+    }
+
 
     /* =============> private <============= */
 
