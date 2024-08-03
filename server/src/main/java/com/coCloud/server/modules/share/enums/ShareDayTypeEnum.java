@@ -39,7 +39,7 @@ public enum ShareDayTypeEnum {
         }
 
         for (ShareDayTypeEnum value : values()) {
-            if (Objects.equals(value.getDays(), code)) {
+            if (Objects.equals(value.getCode(), code)) {
                 return value.getDays();
             }
         }

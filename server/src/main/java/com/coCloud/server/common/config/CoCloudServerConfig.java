@@ -19,9 +19,6 @@ import org.springframework.stereotype.Component;
 @Data
 public class CoCloudServerConfig {
 
-    @Value("${server.port}")
-    private Integer serverPort;
-
     /**
      * 文件分片的过期天数
      */
@@ -30,6 +27,6 @@ public class CoCloudServerConfig {
     /**
      * 分享链接的前缀
      */
-    private String sharePrefix = "http://127.0.0.1:" + serverPort + "/share/";
+    private String sharePrefix = "http://127.0.0.1:8080" + "/share/";
 
 }
