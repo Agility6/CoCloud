@@ -47,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.xmlunit.diff.Diff;
 
 import java.io.Serializable;
+import java.net.URLEncoder;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -386,7 +387,8 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
             sharePrefix += CoCloudConstants.SLASH_STR;
         }
 
-        return sharePrefix + shareId;
+        // 直接加密shareId会出现"/ \ = + -"会影响url的路径
+        return sharePrefix + URLEncoder.encode(IdUtil.encrypt(shareId));
     }
 
     /**

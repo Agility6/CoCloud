@@ -1,5 +1,6 @@
 package com.coCloud.cache.redis.config;
 
+import com.alibaba.fastjson.support.spring.GenericFastJsonRedisSerializer;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +47,11 @@ public class RedisCacheConfig {
         objectMapper.enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
         jackson2JsonRedisSerializer.setObjectMapper(objectMapper);
 
+        // 压测
+        GenericFastJsonRedisSerializer genericFastJsonRedisSerializer = new GenericFastJsonRedisSerializer();
+
+
+
         // 设置 RedisTemplate 的连接工厂
         redisTemplate.setConnectionFactory(redisConnectionFactory);
         // 设置键的序列化方式
@@ -76,6 +82,9 @@ public class RedisCacheConfig {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
         jackson2JsonRedisSerializer.setObjectMapper(objectMapper);
+
+        // 压测
+        // GenericFastJsonRedisSerializer genericFastJsonRedisSerializer = new GenericFastJsonRedisSerializer();
 
         // 创建 RedisCacheConfiguration 实例，用于配置 Redis 缓存的序列化方式
         RedisCacheConfiguration redisCacheConfiguration = RedisCacheConfiguration.defaultCacheConfig()
