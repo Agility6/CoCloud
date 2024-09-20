@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.coCloud.bloom.filter.core.BloomFilter;
+import com.coCloud.bloom.filter.core.BloomFilterManager;
 import com.coCloud.core.constants.CoCloudConstants;
 import com.coCloud.core.exception.CoCloudBusinessException;
 import com.coCloud.core.response.ResponseCode;
@@ -34,6 +36,7 @@ import com.coCloud.server.modules.share.mapper.CoCloudShareMapper;
 import com.coCloud.server.modules.share.vo.*;
 import com.coCloud.server.modules.user.entity.CoCloudUser;
 import com.coCloud.server.modules.user.service.IUserService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.util.Lists;
@@ -44,7 +47,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.xmlunit.diff.Diff;
 
 import java.io.Serializable;
 import java.net.URLEncoder;
@@ -57,6 +59,7 @@ import java.util.stream.Collectors;
  * @createDate 2024-05-10 19:23:23
  */
 @Service
+@Slf4j
 public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudShare> implements IShareService, ApplicationContextAware {
 
     @Autowired
@@ -70,6 +73,11 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
 
     @Autowired
     private IUserService iUserService;
+
+    @Autowired
+    private BloomFilterManager manager;
+
+    private static final String BLOOM_FILTER_NAME = "SHARE_SIMPLE_DETAIL";
 
     private ApplicationContext applicationContext;
 
@@ -96,8 +104,11 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
     public CoCloudShareUrlVO create(CreateShareUrlContext context) {
         saveShare(context);
         saveShareFiles(context);
-        return assembleShareVO(context);
+        CoCloudShareUrlVO vo = assembleShareVO(context);
+        afterCreate(context, vo);
+        return vo;
     }
+
 
     /**
      * 查询用户的分享列表
@@ -267,6 +278,18 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
         }
         Set<Long> shareIdSet = Sets.newHashSet(shareIdList);
         shareIdSet.stream().forEach(this::refreshOneShareStatus);
+    }
+
+    /**
+     * 滚动查询已存在的分享ID
+     *
+     * @param startId
+     * @param limit
+     * @return
+     */
+    @Override
+    public List<Long> rollingQueryShareId(long startId, long limit) {
+        return baseMapper.rollingQueryShareId(startId, limit);
     }
 
     // 重写IService的方法，引入缓存
@@ -859,4 +882,20 @@ public class ShareServiceImpl extends ServiceImpl<CoCloudShareMapper, CoCloudSha
         ShareSimpleDetailVO vo = new ShareSimpleDetailVO();
         context.setVo(vo);
     }
+
+    /**
+     * 创建分享链接后置处理
+     *
+     * @param context
+     * @param vo
+     */
+    private void afterCreate(CreateShareUrlContext context, CoCloudShareUrlVO vo) {
+        BloomFilter<Long> bloomFilter = manager.getFilter(BLOOM_FILTER_NAME);
+        if (Objects.nonNull(bloomFilter)) {
+            bloomFilter.put(context.getRecord().getShareId());
+            log.info("create share, add share id to bloom filter, share id is {}", context.getRecord().getShareId());
+        }
+
+    }
+
 }

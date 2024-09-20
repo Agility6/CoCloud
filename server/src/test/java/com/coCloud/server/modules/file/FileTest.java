@@ -94,8 +94,21 @@ public class FileTest {
         context.setParentId(userInfoVO.getRootFileId());
         context.setUserId(userId);
         context.setFolderName("folder-name");
-
         Long fileId = iUserFileService.createFolder(context);
+
+        CreateFolderContext context2 = new CreateFolderContext();
+        context2.setParentId(userInfoVO.getRootFileId());
+        context2.setUserId(userId);
+        context2.setFolderName("folder-name");
+        iUserFileService.createFolder(context2);
+
+        CreateFolderContext context3 = new CreateFolderContext();
+        context3.setParentId(userInfoVO.getRootFileId());
+        context3.setUserId(userId);
+        context3.setFolderName("folder-name");
+        iUserFileService.createFolder(context3);
+
+
         Assert.notNull(fileId);
     }
 

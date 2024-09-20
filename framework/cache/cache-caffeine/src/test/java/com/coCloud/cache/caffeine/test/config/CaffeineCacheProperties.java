@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  */
 @Data
 @Component
-@ConfigurationProperties(prefix = "com.coCloud.cache.caffeine")
+@ConfigurationProperties(prefix = "com.co-cloud.cache.caffeine")
 public class CaffeineCacheProperties {
 
     /**

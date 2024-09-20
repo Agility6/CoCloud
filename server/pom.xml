@@ -57,6 +57,11 @@
             <artifactId>spring-boot-configuration-processor</artifactId>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <groupId>com.coCloud</groupId>
+            <artifactId>coCloud-bloom-filter-local</artifactId>
+            <version>1.0</version>
+        </dependency>
     </dependencies>
 
     <build>

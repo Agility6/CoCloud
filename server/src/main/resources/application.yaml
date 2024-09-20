@@ -14,7 +14,7 @@ spring:
   datasource:
     username: root
     password: tang6d
-    url: jdbc:mysql://127.0.0.1:3306/co_cloud?characterEncoding=utf8&serverTimeZone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://127.0.0.1:3308/co_cloud?characterEncoding=utf8&serverTimeZone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
   redis:
     host: 127.0.0.1
@@ -49,3 +49,15 @@ logging:
   file: ${user.home}/logs/${spring.application.name}/${spring.application.name}.log
   level:
     root: INFO
+com:
+  co-cloud:
+    server:
+      share-prefix: http://127.0.0.1:5173
+    bloom:
+      filter:
+        local:
+          items:
+            - name: SHARE_SIMPLE_DETAIL
+              funnel-type-name: LONG
+              expected-insertions: 10000000
+              fpp: 0.01

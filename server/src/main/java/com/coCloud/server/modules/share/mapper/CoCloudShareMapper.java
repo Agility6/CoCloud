@@ -22,6 +22,15 @@ public interface CoCloudShareMapper extends BaseMapper<CoCloudShare> {
      * @return
      */
     List<CoCloudShareUrlListVO> selectShareVOListByUserId(@Param("userId") Long userId);
+
+    /**
+     * 滚动查询已存在的分享ID
+     *
+     * @param startId
+     * @param limit
+     * @return
+     */
+    List<Long> rollingQueryShareId(@Param("startId") long startId, @Param("limit") long limit);
 }
 
 
